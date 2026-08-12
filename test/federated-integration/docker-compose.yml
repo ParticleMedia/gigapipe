@@ -23,7 +23,6 @@ x-clickhouse-env:
   CLICKHOUSE_PROTO: tcp
   CLICKHOUSE_DB: gigapipe
   CLUSTER_NAME: default
-  STORAGE_POLICY: tiered_nvme_s3
   # Ruler (only actually boots in MODE=all; harmless in writer/reader).
   QRYN_RULER_ENABLED: "true"
   QRYN_RULER_POLL_INTERVAL: "1m"
