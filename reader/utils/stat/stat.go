@@ -2,14 +2,24 @@ package stat
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/metrico/qryn/v5/reader/metric"
 )
 
-func ObserveLatency(route, status string, seconds float64) {
-	metric.RequestDuration.WithLabelValues(route, status).Observe(seconds)
+func resolveDownstreamHost() string {
+	if v := os.Getenv("CLICKHOUSE_SERVER"); v != "" {
+		return v
+	}
+	return "localhost"
+}
+
+var downstreamHost = resolveDownstreamHost()
+
+func ObserveLatency(route, status, downstream string, seconds float64) {
+	metric.RequestDuration.WithLabelValues(route, status, downstream).Observe(seconds)
 }
 
 func InstrumentRoute(route string, next http.HandlerFunc) http.HandlerFunc {
@@ -17,7 +27,7 @@ func InstrumentRoute(route string, next http.HandlerFunc) http.HandlerFunc {
 		sw := &statusWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		start := time.Now()
 		next.ServeHTTP(sw, r)
-		ObserveLatency(route, strconv.Itoa(sw.statusCode), time.Since(start).Seconds())
+		ObserveLatency(route, strconv.Itoa(sw.statusCode), downstreamHost, time.Since(start).Seconds())
 	}
 }
 
