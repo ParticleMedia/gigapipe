@@ -1,0 +1,28 @@
+# Scrape config for the ephemeral Prometheus in this stack.
+#
+# Only the gigapipe reader currently exposes an HTTP /metrics endpoint (enabled
+# in reader/router/misc.go), so that is the sole gigapipe target. This is where
+# the gigapipe_request_duration_seconds histogram is published. The writer does
+# not serve /metrics, so it is not scraped here.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: gigapipe-writer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gigapipe-writer:3100"]
+        labels:
+          component: writer
+  
+  - job_name: gigapipe-reader
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gigapipe-reader:3100"]
+        labels:
+          component: reader
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

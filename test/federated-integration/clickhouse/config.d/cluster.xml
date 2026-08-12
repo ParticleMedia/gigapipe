@@ -63,18 +63,4 @@
             </shard>
         </default>
     </remote_servers>
-
-    <!-- Storage policy named to match the writer's STORAGE_POLICY env. Backed by
-         the default disk only (no S3), so it works without extra infrastructure. -->
-    <storage_configuration>
-        <policies>
-            <tiered_nvme_s3>
-                <volumes>
-                    <main>
-                        <disk>default</disk>
-                    </main>
-                </volumes>
-            </tiered_nvme_s3>
-        </policies>
-    </storage_configuration>
 </clickhouse>

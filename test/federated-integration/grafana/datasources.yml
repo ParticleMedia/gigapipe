@@ -1,0 +1,33 @@
+# Auto-provisioned Loki datasources for the ephemeral Grafana in this stack.
+# Both point at the gigapipe reader; they differ only in the tenant header
+# (X-Scope-OrgID) so the federated reader scopes each to its own oid.
+apiVersion: 1
+
+datasources:
+  - name: gigapipe-platform
+    type: loki
+    access: proxy
+    uid: gigapipe-platform
+    url: http://gigapipe-reader:3100
+    isDefault: true
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: platform
+
+  - name: gigapipe-data
+    type: loki
+    access: proxy
+    uid: gigapipe-data
+    url: http://gigapipe-reader:3100
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: data
+
+  # Prometheus scraping the reader's /metrics (gigapipe_request_duration_seconds).
+  - name: prometheus
+    type: prometheus
+    access: proxy
+    uid: prometheus
+    url: http://prometheus:9090

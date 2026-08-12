@@ -23,7 +23,6 @@ x-clickhouse-env:
   CLICKHOUSE_PROTO: tcp
   CLICKHOUSE_DB: gigapipe
   CLUSTER_NAME: default
-  STORAGE_POLICY: tiered_nvme_s3
   # Ruler (only actually boots in MODE=all; harmless in writer/reader).
   QRYN_RULER_ENABLED: "true"
   QRYN_RULER_POLL_INTERVAL: "1m"
@@ -184,6 +183,48 @@ services:
       - /etc/alloy/config.alloy
       - --storage.path=/var/lib/alloy/data
       - --server.http.listen-addr=0.0.0.0:12345
+    restart: unless-stopped
+
+  # 5a. Ephemeral Prometheus. Scrapes the reader's /metrics endpoint (where the
+  #     gigapipe_request_duration_seconds histogram lives) every 5s. Storage is
+  #     the container's own layer — no named volume — so `down` discards it.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    depends_on:
+      gigapipe-reader:
+        condition: service_started
+    networks: [federated]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      # Prometheus UI/API on the standard host port 0.0.0.0:9090.
+      - "9090:9090"
+    restart: unless-stopped
+
+  # 5b. Ephemeral Grafana for eyeballing the UI. Anonymous access is enabled and
+  #     granted the Admin role, so http://localhost:3000 opens straight into the
+  #     app with no login. All state lives in the container's tmpfs-backed layer
+  #     (no named volume), so `down` wipes it. Two Loki datasources are
+  #     provisioned — gigapipe-platform (default) and gigapipe-data — each
+  #     pinned to its tenant via the X-Scope-OrgID header on the reader.
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    depends_on:
+      gigapipe-reader:
+        condition: service_started
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    networks: [federated]
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    ports:
+      # Grafana UI on the standard host port 0.0.0.0:3000.
+      - "3000:3000"
     restart: unless-stopped
 
   # 6. Grafana Alloy for data team: tails the dummy app's log file and ships to the writer's
