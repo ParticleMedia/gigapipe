@@ -43,7 +43,7 @@ services:
   # 0. Ephemeral ClickHouse: single-node cluster `default` with embedded Keeper.
   #    Data lives in a named volume that `down -v` removes.
   clickhouse:
-    image: clickhouse/clickhouse-server:25.3.14.14
+    image: clickhouse/clickhouse-server:26.3
     container_name: clickhouse
     hostname: clickhouse
     environment:
