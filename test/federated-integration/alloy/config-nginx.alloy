@@ -1,0 +1,98 @@
+// Grafana Alloy: tail the dummy-nginx per-tenant access logs and ship each to
+// the gigapipe writer's Loki push API tagged with its tenant (X-Scope-OrgID).
+//
+// Under FEDERATED=1 the writer REQUIRES X-Scope-OrgID, so tenant_id below is
+// what makes ingestion succeed and what the reader must match to query it back.
+//
+// nginx writes access-platform.log / access-data.log / access-api.log; each
+// gets its own pipeline so it is pushed under the matching tenant.
+
+// ---- platform -------------------------------------------------------------
+local.file_match "platform" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/access-platform.log",
+    job      = "dummy-nginx",
+    service  = "dummy-nginx",
+    source   = "platform",
+  }]
+}
+loki.source.file "platform" {
+  targets    = local.file_match.platform.targets
+  forward_to = [loki.process.platform.receiver]
+}
+loki.process "platform" {
+  stage.logfmt {
+    mapping = { "status" = "", "method" = "" }
+  }
+  stage.labels {
+    values = { "status" = "", "method" = "" }
+  }
+  forward_to = [loki.write.platform.receiver]
+}
+loki.write "platform" {
+  endpoint {
+    url       = "http://gigapipe-writer:3100/loki/api/v1/push"
+    tenant_id = "platform"
+  }
+  external_labels = { collector = "alloy-nginx" }
+}
+
+// ---- data ------------------------------------------------------------------
+local.file_match "data" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/access-data.log",
+    job      = "dummy-nginx",
+    service  = "dummy-nginx",
+    source   = "data",
+  }]
+}
+loki.source.file "data" {
+  targets    = local.file_match.data.targets
+  forward_to = [loki.process.data.receiver]
+}
+loki.process "data" {
+  stage.logfmt {
+    mapping = { "status" = "", "method" = "" }
+  }
+  stage.labels {
+    values = { "status" = "", "method" = "" }
+  }
+  forward_to = [loki.write.data.receiver]
+}
+loki.write "data" {
+  endpoint {
+    url       = "http://gigapipe-writer:3100/loki/api/v1/push"
+    tenant_id = "data"
+  }
+  external_labels = { collector = "alloy-nginx" }
+}
+
+// ---- api (new tenant) ------------------------------------------------------
+local.file_match "api" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/access-api.log",
+    job      = "dummy-nginx",
+    service  = "dummy-nginx",
+    source   = "api",
+  }]
+}
+loki.source.file "api" {
+  targets    = local.file_match.api.targets
+  forward_to = [loki.process.api.receiver]
+}
+loki.process "api" {
+  stage.logfmt {
+    mapping = { "status" = "", "method" = "" }
+  }
+  stage.labels {
+    values = { "status" = "", "method" = "" }
+  }
+  forward_to = [loki.write.api.receiver]
+}
+loki.write "api" {
+  endpoint {
+    url       = "http://gigapipe-writer:3100/loki/api/v1/push"
+    tenant_id = "api"
+  }
+  external_labels = { collector = "alloy-nginx" }
+}
