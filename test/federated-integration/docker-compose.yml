@@ -38,12 +38,14 @@ volumes:
   applogs-data: {}
   alloydata: {}
   clickhousedata: {}
+  # Shared between dummy-nginx (writer) and alloy-nginx (tailer).
+  nginxlogs: {}
 
 services:
   # 0. Ephemeral ClickHouse: single-node cluster `default` with embedded Keeper.
   #    Data lives in a named volume that `down -v` removes.
   clickhouse:
-    image: clickhouse/clickhouse-server:26.3
+    image: clickhouse/clickhouse-server:26.4
     container_name: clickhouse
     hostname: clickhouse
     environment:
@@ -243,6 +245,108 @@ services:
     ports:
       # Alloy's own debug UI on host 0.0.0.0:12345.
       - "12346:12345"
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    restart: unless-stopped
+
+  # 7. Dummy "log generator" nginx. Accepts all traffic, discards it (returns
+  #    204 and proxies nowhere — effectively /dev/null), and writes one
+  #    access-log line per request into per-tenant files under a shared volume.
+  #    See nginx/nginx.conf for how the URL prefix maps to the tenant/log file.
+  dummy-nginx:
+    image: nginx:1.27-alpine
+    container_name: dummy-nginx
+    networks: [federated]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginxlogs:/var/log/nginx
+    restart: unless-stopped
+
+  # 8. Traffic generators. Each hits dummy-nginx on a tenant-specific path in a
+  #    loop; nginx logs every request and attributes it to that tenant. They do
+  #    not talk to gigapipe directly — their footprint is the nginx access log,
+  #    which alloy-nginx (below) ships under the matching X-Scope-OrgID.
+  #    $$ escapes the $ so Compose does not interpolate it.
+  traffic-platform:
+    image: curlimages/curl:8.11.1
+    container_name: traffic-platform
+    depends_on:
+      dummy-nginx:
+        condition: service_started
+    networks: [federated]
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while true; do
+          i=$$((i+1))
+          curl -s -o /dev/null "http://dummy-nginx:8080/platform/handle?iter=$$i"
+          sleep 1
+        done
+    restart: unless-stopped
+
+  traffic-data:
+    image: curlimages/curl:8.11.1
+    container_name: traffic-data
+    depends_on:
+      dummy-nginx:
+        condition: service_started
+    networks: [federated]
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while true; do
+          i=$$((i+1))
+          curl -s -o /dev/null "http://dummy-nginx:8080/data/handle?iter=$$i"
+          sleep 1
+        done
+    restart: unless-stopped
+
+  # New 'api' tenant — it has no dummy-app of its own; its logs exist only via
+  # nginx and are shipped by alloy-nginx with tenant_id=api.
+  traffic-api:
+    image: curlimages/curl:8.11.1
+    container_name: traffic-api
+    depends_on:
+      dummy-nginx:
+        condition: service_started
+    networks: [federated]
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while true; do
+          i=$$((i+1))
+          curl -s -o /dev/null "http://dummy-nginx:8080/api/handle?iter=$$i"
+          sleep 1
+        done
+    restart: unless-stopped
+
+  # 9. Grafana Alloy for the nginx logs: tails the three per-tenant access-log
+  #    files and ships each to the writer under its tenant (platform/data/api).
+  alloy-nginx:
+    image: grafana/alloy:latest
+    container_name: alloy-logs-nginx
+    depends_on:
+      gigapipe-writer:
+        condition: service_started
+      dummy-nginx:
+        condition: service_started
+    networks: [federated]
+    volumes:
+      - ./alloy/config-nginx.alloy:/etc/alloy/config.alloy:ro
+      - nginxlogs:/var/log/nginx:ro
+      - alloydata:/var/lib/alloy/data
+    ports:
+      # Alloy's own debug UI on host 0.0.0.0:12347.
+      - "12347:12345"
     command:
       - run
       - /etc/alloy/config.alloy

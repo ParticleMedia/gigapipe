@@ -9,7 +9,6 @@ datasources:
     access: proxy
     uid: gigapipe-platform
     url: http://gigapipe-reader:3100
-    isDefault: true
     jsonData:
       httpHeaderName1: X-Scope-OrgID
     secureJsonData:
@@ -24,6 +23,27 @@ datasources:
       httpHeaderName1: X-Scope-OrgID
     secureJsonData:
       httpHeaderValue1: data
+
+  - name: gigapipe-api
+    type: loki
+    access: proxy
+    uid: gigapipe-api
+    url: http://gigapipe-reader:3100
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: api
+
+  - name: gigapipe-all
+    type: loki
+    access: proxy
+    uid: gigapipe-all
+    url: http://gigapipe-reader:3100
+    isDefault: true
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: platform|data|api
 
   # Prometheus scraping the reader's /metrics (gigapipe_request_duration_seconds).
   - name: prometheus
