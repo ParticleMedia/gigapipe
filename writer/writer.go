@@ -18,6 +18,7 @@ func Init(cfg *clconfig.ClokiConfig, router *mux.Router) {
 	qrynPlugin.Initialize(*config.Cloki.Setting)
 	qrynPlugin.CreateStaticServiceRegistry(*config.Cloki.Setting)
 	qrynPlugin.StartPushStat() // internal goroutine
+	// Instantiates global cache and service registry after writer initialization
 	controllerv1.Registry = plugin.ServiceRegistry
 	controllerv1.FPCache = plugin.GoCache
 	// Expose a ClickHouse client for in-process consumers (e.g. the ruler's

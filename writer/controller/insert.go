@@ -48,10 +48,10 @@ import (
 
 func PushStreamV2(cfg MiddlewareConfig) func(w http.ResponseWriter, r *http.Request) {
 	return Build(
-		append(cfg.ExtraMiddleware,
-			withTSAndSampleService,
-			withSimpleParser("*", Parser(unmarshal.DecodePushRequestStringV2)),
-			withComplexParser("application/x-protobuf",
+		append(cfg.ExtraMiddleware, // controller.WithOverallContextMiddleware (applies prerequest to extract and propagate request header values in context)
+			withTSAndSampleService, // controller.withTSAndSampleService (applies prerequest to extract and propagate insertion services in context)
+			withSimpleParser("*", Parser(unmarshal.DecodePushRequestStringV2)), // Defines simple parser for all Content-Types (*) and enriches context with simple parser instantiation for logs
+			withComplexParser("application/x-protobuf", // Defines complex parser for Protobuf type and enriches context with protobuf parser instantation for logs
 				Parser(unmarshal.UnmarshalProtoV2),
 				withUnsnappyRequest),
 			withOkStatusAndBody(204, nil),

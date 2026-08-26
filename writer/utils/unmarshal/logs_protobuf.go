@@ -43,7 +43,7 @@ func (l *logsProtoDec) SetOnEntries(h onEntriesHandler) {
 }
 
 var UnmarshalProtoV2 = Build(
-	withBufferedBody,
+	withBufferedBody, // Reads in the body
 	withParsedBody(func() proto.Message { return &logproto.PushRequest{} }),
 	withLogsParser(func(ctx *ParserCtx) iLogsParser {
 		return &logsProtoDec{ctx: ctx}
