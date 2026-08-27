@@ -33,6 +33,27 @@ func (s *SqlMatch) String(ctx *sql.Ctx, opts ...int) (string, error) {
 	return fmt.Sprintf("match(%s, %s)", strCol, strVal), nil
 }
 
+// SqlHasPhrase renders a ClickHouse hasPhrase() token/word-boundary match. The
+// phrase is emitted through NewStringVal so quoting/escaping matches SqlMatch.
+type SqlHasPhrase struct {
+	col    sql.SQLObject
+	phrase string
+}
+
+func (s *SqlHasPhrase) String(ctx *sql.Ctx, opts ...int) (string, error) {
+	strCol, err := s.col.String(ctx, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	strVal, err := sql.NewStringVal(s.phrase).String(ctx, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("hasPhrase(%s, %s)", strCol, strVal), nil
+}
+
 type sqlMapUpdate struct {
 	m1 sql.SQLObject
 	m2 sql.SQLObject

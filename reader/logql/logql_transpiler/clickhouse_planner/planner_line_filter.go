@@ -60,7 +60,7 @@ func (l *LineFilterPlanner) buildSimpleCondition(fn string, s *log_parser.LineFi
 	tmp := &lineFilterOps{val: val}
 	switch fn {
 	case "|=":
-		return tmp.doLike("like")
+		return tmp.doHasPhrase()
 	case "!=":
 		return tmp.doLike("notLike")
 	case "|~":
@@ -117,6 +117,36 @@ func (o *lineFilterOps) doLike(likeOp string) (sql.SQLCondition, error) {
 	return sql.Eq(
 		sql.NewRawObject(fmt.Sprintf("%s(samples.string, '%%%s%%')", likeOp, enqVal)), sql.NewIntVal(1),
 	), nil
+}
+
+// doHasPhrase optimizes a |= substring filter into a hasPhrase() token match.
+// The value is split on non-alphanumeric characters and rejoined with single
+// spaces so it aligns with ClickHouse's hasPhrase tokenization; unlike LIKE
+// '%val%', this matches on word boundaries (|= "bar" no longer matches "foobar").
+// A value with no alphanumeric characters falls back to the original LIKE.
+func (o *lineFilterOps) doHasPhrase() (sql.SQLCondition, error) {
+	phrase := splitOnNonAlphanumeric(o.val)
+	if phrase == "" {
+		return o.doLike("like")
+	}
+	return sql.Eq(
+		&SqlHasPhrase{col: sql.NewRawObject("samples.string"), phrase: phrase}, sql.NewIntVal(1),
+	), nil
+}
+
+// splitOnNonAlphanumeric trims surrounding whitespace, splits on every
+// non-alphanumeric rune, and rejoins the tokens with single spaces. Runs of
+// separators collapse and empty tokens are dropped. ASCII-only, matching
+// ClickHouse's default token splitter.
+func splitOnNonAlphanumeric(s string) string {
+	fields := strings.FieldsFunc(strings.TrimSpace(s), func(r rune) bool {
+		return !isAlphanumericRune(r)
+	})
+	return strings.Join(fields, " ")
+}
+
+func isAlphanumericRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 }
 
 func (o *lineFilterOps) re2Like() (string, bool, bool) {

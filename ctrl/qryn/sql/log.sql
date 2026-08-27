@@ -220,5 +220,3 @@ ADD INDEX text_index string TYPE text(
 );
 
 ALTER TABLE samples_v3 {{.OnCluster}} MATERIALIZE INDEX text_index;
-
-ALTER TABLE samples_v3 ON CLUSTER 'default' MATERIALIZE INDEX text_index;
