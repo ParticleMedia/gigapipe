@@ -240,25 +240,21 @@ func updateScripts(db clickhouse.Conn, dbname string, clusterName string, k int6
 	if storagePolicy != "" {
 		env["CREATE_SETTINGS"] = fmt.Sprintf("SETTINGS storage_policy = '%s'", storagePolicy)
 	}
-	//TODO: move to the config package as it should be: os.Getenv("ADVANCED_SAMPLES_ORDERING")
-	if advancedSamplesOrdering != "" {
-		env["SAMPLES_ORDER_RUL"] = advancedSamplesOrdering
-	}
-	// When federated, every table gains a non-empty `oid` tenancy column with no
-	// DEFAULT, and fresh tables prepend `oid` to the sorting key. Existing tables
-	// only get the column (ClickHouse cannot add a new key column to a populated
-	// table's ORDER BY), which is acceptable: read filtering still works.
-	// Federated drives whole-statement {{if .Federated}}...{{end}} guards (e.g.
-	// the appended existing-table ADD COLUMN migrations). Empty string is falsey
-	// in text/template, so OFF renders those statements to nothing.
+
 	env["Federated"] = ""
 	if federation.Enabled() {
 		env["Federated"] = "1"
 		env["OID_COL"] = "oid LowCardinality(String),"
 		env["OID_KEY"] = "oid, "
 		env["OID_ADD_COLUMN"] = "ADD COLUMN IF NOT EXISTS oid LowCardinality(String)"
-		env["SAMPLES_ORDER_RUL"] = "oid, " + env["SAMPLES_ORDER_RUL"]
+		env["SAMPLES_ORDER_RUL"] = env["SAMPLES_ORDER_RUL"] + ", oid"
 	}
+
+	//TODO: move to the config package as it should be: os.Getenv("ADVANCED_SAMPLES_ORDERING")
+	if advancedSamplesOrdering != "" {
+		env["SAMPLES_ORDER_RUL"] = advancedSamplesOrdering
+	}
+
 	//TODO: move to the config package
 	if skipUnavailableShards {
 		env["DIST_CREATE_SETTINGS"] += " SETTINGS skip_unavailable_shards = 1"

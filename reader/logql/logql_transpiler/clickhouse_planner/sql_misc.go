@@ -228,21 +228,18 @@ func GetTypes(ctx *shared.PlannerContext) *sql.In {
 //     query returns nothing. This is the safety net behind the controller-level
 //     instant-empty short-circuit; every row has a non-empty oid by invariant,
 //     so "no tenant" correctly means "no rows".
-//   - regex present: match(<oid>, '^(<regex>)$'), anchored so "platform" never
-//     matches "platform-staging". The regex is pre-sanitized by SanitizeOid.
+//   - tenants present: oid IN ('a','b',...) (oid = 'a' for a single tenant).
+//     Tenants are exact string literals, resolved and validated by
+//     shared.ResolveTenants; the oid path never uses match().
 func GetOidFilter(ctx *shared.PlannerContext, tableAlias string) sql.SQLCondition {
 	if !ctx.Federated {
 		return nil
-	}
-	if ctx.OidFilter.Deny || ctx.OidFilter.Regex == "" {
-		return sql.Eq(sql.NewIntVal(1), sql.NewIntVal(0))
 	}
 	col := "oid"
 	if tableAlias != "" {
 		col = tableAlias + ".oid"
 	}
-	return sql.Eq(&SqlMatch{col: sql.NewRawObject(col), pattern: "^(" + ctx.OidFilter.Regex + ")$"},
-		sql.NewIntVal(1))
+	return shared.BuildOidCondition(col, ctx.OidFilter)
 }
 
 type UnionAll struct {

@@ -47,23 +47,24 @@ func withSimpleParser(contentType string, parser Parser) BuildOption {
 }
 
 func withComplexParser(contentType string, parser Parser, options ...BuildOption) BuildOption {
+	// Instantiate new local pusherCtx variable
 	pusherCtx := &PusherCtx{
 		Parser: make(map[string]Requester),
 	}
 
-	// Apply options to pusherCtx
+	// Apply options to local pusherCtx
 	for _, o := range options {
 		pusherCtx = o(pusherCtx)
 	}
 
-	// Define parser for contentType
+	// Define parser for local pusherCtx's ['*'] contentType
 	pusherCtx.Parser["*"] = func(w http.ResponseWriter, r *http.Request) error {
 		return doParse(r, parser)
 	}
 
 	// Return BuildOption function
 	return func(ctx *PusherCtx) *PusherCtx {
-		// Set the parser for contentType in ctx
+		// Set the parser for specific contentType in ctx using the Do function for local pusherCtx
 		ctx.Parser[contentType] = pusherCtx.Do
 		return ctx
 	}
