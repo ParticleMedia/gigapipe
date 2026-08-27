@@ -229,7 +229,7 @@ func (m *RuleManager) evaluateRecordingRule(oid, namespace, groupName string, ru
 	// off (oid is ""); the reader ignores the filter unless federation.Enabled().
 	evalCtx := m.ctx
 	if federation.Enabled() {
-		evalCtx = shared.WithOidFilter(m.ctx, shared.OidFilter{Regex: oid})
+		evalCtx = shared.WithOidFilter(m.ctx, shared.OidFilterFor(oid))
 	}
 	result, err := m.evaluator.Evaluate(evalCtx, rule.Expr, now)
 	dur := time.Since(start)

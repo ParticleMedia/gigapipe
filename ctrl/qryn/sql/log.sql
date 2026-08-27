@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS {{.DB}}.time_series {{.OnCluster}} (
     name String
 ) ENGINE = {{.ReplacingMergeTree}}(date)
 PARTITION BY date
-ORDER BY ({{.OID_KEY}}fingerprint) {{.CREATE_SETTINGS}};
+ORDER BY (fingerprint{{if .Federated}}, oid{{end}}) {{.CREATE_SETTINGS}};
 
 CREATE TABLE IF NOT EXISTS {{.DB}}.samples_v3 {{.OnCluster}} (
   {{.OID_COL}}
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS {{.DB}}.time_series_gin {{.OnCluster}} (
     fingerprint UInt64
 ) ENGINE = {{.ReplacingMergeTree}}()
 PARTITION BY date
-ORDER BY ({{.OID_KEY}}key, val, fingerprint) {{.CREATE_SETTINGS}};
+ORDER BY (key, val, {{.OID_KEY}}fingerprint) {{.CREATE_SETTINGS}};
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS {{.DB}}.time_series_gin_view {{.OnCluster}} TO time_series_gin
 AS SELECT
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS {{.DB}}.metrics_15s {{.OnCluster}} (
     bytes SimpleAggregateFunction(sum, Float64)
 ) ENGINE = {{.AggregatingMergeTree}}
 PARTITION BY toDate(toDateTime(intDiv(timestamp_ns, 1000000000)))
-ORDER BY ({{.OID_KEY}}fingerprint, timestamp_ns) {{.CREATE_SETTINGS}};
+ORDER BY (fingerprint, timestamp_ns{{if .Federated}}, oid{{end}}) {{.CREATE_SETTINGS}};
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS {{.DB}}.metrics_15s_mv {{.OnCluster}} TO metrics_15s
 AS SELECT
@@ -108,7 +108,7 @@ AS SELECT
     sumSimpleState(value) as sum,
     sumSimpleState(length(string)) as bytes
 FROM {{.DB}}.samples_v3 as samples
-GROUP BY {{.OID_KEY}}fingerprint, timestamp_ns;
+GROUP BY fingerprint, timestamp_ns{{if .Federated}}, oid{{end}};
 
 INSERT INTO {{.DB}}.settings (fingerprint, type, name, value, inserted_at)
 VALUES (cityHash64('update_v3_2'), 'update', 'v3_2', toString(toUnixTimestamp(NOW())), NOW());
@@ -118,18 +118,18 @@ VALUES (cityHash64('update_v3_2'), 'update', 'v3_2', toString(toUnixTimestamp(NO
 
 ALTER TABLE {{.DB}}.time_series {{.OnCluster}}
     ADD COLUMN IF NOT EXISTS type UInt8,
-    MODIFY ORDER BY ({{.OID_KEY}}fingerprint, type);
+    MODIFY ORDER BY (fingerprint, {{.OID_KEY}}type);
 
 ALTER TABLE {{.DB}}.samples_v3 {{.OnCluster}}
     ADD COLUMN IF NOT EXISTS type UInt8;
 
 ALTER TABLE {{.DB}}.time_series_gin {{.OnCluster}}
     ADD COLUMN IF NOT EXISTS type UInt8,
-    MODIFY ORDER BY ({{.OID_KEY}}key, val, fingerprint, type);
+    MODIFY ORDER BY (key, val, {{.OID_KEY}}fingerprint, type);
 
 ALTER TABLE {{.DB}}.metrics_15s {{.OnCluster}}
     ADD COLUMN IF NOT EXISTS type UInt8,
-    MODIFY ORDER BY ({{.OID_KEY}}fingerprint, timestamp_ns, type);
+    MODIFY ORDER BY (fingerprint, timestamp_ns, {{.OID_KEY}}type);
 
 RENAME TABLE {{.DB}}.time_series_gin_view TO time_series_gin_view_bak {{.OnCluster}};
 
@@ -212,3 +212,13 @@ ALTER TABLE {{.DB}}.time_series {{.OnCluster}}
 
 {{if .Federated}}ALTER TABLE {{.DB}}.metrics_15s {{.OnCluster}}
     {{.OID_ADD_COLUMN}}{{end}};
+
+## Further Index Optimizations (only supported in ClickHouse versions >=26.2)
+ALTER TABLE samples_v3 {{.OnCluster}}
+ADD INDEX text_index string TYPE text(
+    tokenizer = 'splitByNonAlpha'
+);
+
+ALTER TABLE samples_v3 {{.OnCluster}} MATERIALIZE INDEX text_index;
+
+ALTER TABLE samples_v3 ON CLUSTER 'default' MATERIALIZE INDEX text_index;

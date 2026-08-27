@@ -32,27 +32,27 @@ func TestGetOidFilter_DenyIsFalse(t *testing.T) {
 	}
 }
 
-func TestGetOidFilter_EmptyRegexIsFalse(t *testing.T) {
+func TestGetOidFilter_NoTenantsIsFalse(t *testing.T) {
 	ctx := &shared.PlannerContext{Federated: true, OidFilter: shared.OidFilter{}}
 	if got := renderCond(t, GetOidFilter(ctx, "")); got != "(1) == (0)" {
-		t.Errorf("empty-regex filter = %q, want (1) == (0)", got)
+		t.Errorf("no-tenants filter = %q, want (1) == (0)", got)
 	}
 }
 
-func TestGetOidFilter_RegexAnchoredMatch(t *testing.T) {
-	ctx := &shared.PlannerContext{Federated: true, OidFilter: shared.OidFilter{Regex: "platform|data"}}
+func TestGetOidFilter_MultiTenantIn(t *testing.T) {
+	ctx := &shared.PlannerContext{Federated: true, OidFilter: shared.OidFilter{Tenants: []string{"platform", "data"}}}
 	got := renderCond(t, GetOidFilter(ctx, "samples"))
-	want := `(match(samples.oid, '^(platform|data)$')) == (1)`
+	want := `samples.oid IN ('platform','data')`
 	if got != want {
-		t.Errorf("regex filter = %q, want %q", got, want)
+		t.Errorf("multi-tenant filter = %q, want %q", got, want)
 	}
 }
 
-func TestGetOidFilter_UnqualifiedColumn(t *testing.T) {
-	ctx := &shared.PlannerContext{Federated: true, OidFilter: shared.OidFilter{Regex: "platform"}}
+func TestGetOidFilter_SingleTenantEq(t *testing.T) {
+	ctx := &shared.PlannerContext{Federated: true, OidFilter: shared.OidFilter{Tenants: []string{"platform"}}}
 	got := renderCond(t, GetOidFilter(ctx, ""))
-	want := `(match(oid, '^(platform)$')) == (1)`
+	want := `(oid) == ('platform')`
 	if got != want {
-		t.Errorf("unqualified filter = %q, want %q", got, want)
+		t.Errorf("single-tenant filter = %q, want %q", got, want)
 	}
 }
