@@ -33,6 +33,51 @@ func (s *SqlMatch) String(ctx *sql.Ctx, opts ...int) (string, error) {
 	return fmt.Sprintf("match(%s, %s)", strCol, strVal), nil
 }
 
+type SqlLike struct {
+	op      string
+	col     sql.SQLObject
+	pattern string
+}
+
+func (s *SqlLike) GetFunction() string { return s.op }
+
+func (s *SqlLike) GetEntity() []sql.SQLObject {
+	return []sql.SQLObject{s.col, sql.NewRawObject("'" + s.pattern + "'")}
+}
+
+func (s *SqlLike) String(ctx *sql.Ctx, opts ...int) (string, error) {
+	strCol, err := s.col.String(ctx, opts...)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s(%s, '%s')", s.op, strCol, s.pattern), nil
+}
+
+type SqlHasPhrase struct {
+	col    sql.SQLObject
+	phrase string
+}
+
+func (s *SqlHasPhrase) GetFunction() string { return "hasPhrase" }
+
+func (s *SqlHasPhrase) GetEntity() []sql.SQLObject {
+	return []sql.SQLObject{s.col, sql.NewStringVal(s.phrase)}
+}
+
+func (s *SqlHasPhrase) String(ctx *sql.Ctx, opts ...int) (string, error) {
+	strCol, err := s.col.String(ctx, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	strVal, err := sql.NewStringVal(s.phrase).String(ctx, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("hasPhrase(%s, %s)", strCol, strVal), nil
+}
+
 type sqlMapUpdate struct {
 	m1 sql.SQLObject
 	m2 sql.SQLObject

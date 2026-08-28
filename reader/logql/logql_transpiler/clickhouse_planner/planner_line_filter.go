@@ -60,7 +60,7 @@ func (l *LineFilterPlanner) buildSimpleCondition(fn string, s *log_parser.LineFi
 	tmp := &lineFilterOps{val: val}
 	switch fn {
 	case "|=":
-		return tmp.doLike("like")
+		return tmp.doHasPhrase()
 	case "!=":
 		return tmp.doLike("notLike")
 	case "|~":
@@ -114,9 +114,36 @@ func (o *lineFilterOps) doLike(likeOp string) (sql.SQLCondition, error) {
 	enqVal = strings.Trim(enqVal, `'`)
 	enqVal = strings.Replace(enqVal, "%", "\\%", -1)
 	enqVal = strings.Replace(enqVal, "_", "\\_", -1)
-	return sql.Eq(
-		sql.NewRawObject(fmt.Sprintf("%s(samples.string, '%%%s%%')", likeOp, enqVal)), sql.NewIntVal(1),
-	), nil
+
+	return &SqlLike{
+		op:      likeOp,
+		col:     sql.NewRawObject("samples.string"),
+		pattern: "%" + enqVal + "%",
+	}, nil
+}
+
+func (o *lineFilterOps) doHasPhrase() (sql.SQLCondition, error) {
+	phrase := splitOnNonAlphanumeric(o.val)
+	if phrase == "" {
+		return o.doLike("like")
+	}
+
+	return &SqlHasPhrase{col: sql.NewRawObject("samples.string"), phrase: phrase}, nil
+}
+
+// splitOnNonAlphanumeric trims surrounding whitespace, splits on every
+// non-alphanumeric rune, and rejoins the tokens with single spaces. Runs of
+// separators collapse and empty tokens are dropped. ASCII-only, matching
+// ClickHouse's default token splitter.
+func splitOnNonAlphanumeric(s string) string {
+	fields := strings.FieldsFunc(strings.TrimSpace(s), func(r rune) bool {
+		return !isAlphanumericRune(r)
+	})
+	return strings.Join(fields, " ")
+}
+
+func isAlphanumericRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 }
 
 func (o *lineFilterOps) re2Like() (string, bool, bool) {
@@ -124,7 +151,7 @@ func (o *lineFilterOps) re2Like() (string, bool, bool) {
 	if err != nil {
 		return "", false, false
 	}
-	if exp.Op != syntax.OpLiteral || exp.Flags& ^(syntax.PerlX|syntax.FoldCase) != 0 {
+	if exp.Op != syntax.OpLiteral || exp.Flags & ^(syntax.PerlX|syntax.FoldCase) != 0 {
 		return "", false, false
 	}
 	return string(exp.Rune), exp.Flags&syntax.FoldCase != 0, true
