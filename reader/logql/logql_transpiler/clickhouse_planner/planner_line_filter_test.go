@@ -58,6 +58,56 @@ func TestLineFilterEqualsUsesHasPhrase(t *testing.T) {
 	}
 }
 
+// The hasPhrase() predicate must be emitted bare (no `= 1` wrapper). Wrapping it
+// as equals(hasPhrase(...), 1) makes the predicate root an equals() node, which
+// ClickHouse's index analyzer treats as an unindexed scalar comparison and so
+// bypasses the samples_v3 TYPE text full-text index.
+func TestLineFilterHasPhraseIsBareBoolean(t *testing.T) {
+	got := lineFilterSQL(t, "|=", `"bar baz"`)
+	if !strings.Contains(got, `(hasPhrase(samples.string, 'bar baz'))`) {
+		t.Fatalf("expected bare hasPhrase predicate in:\n%s", got)
+	}
+	if strings.Contains(got, "== (1)") || strings.Contains(got, "= 1") {
+		t.Fatalf("hasPhrase must not be wrapped in `= 1`, got:\n%s", got)
+	}
+}
+
+// `|= "a" or "b"` combines two bare hasPhrase() search nodes; neither may be
+// masked by a `= 1` equality wrapper.
+func TestLineFilterHasPhraseOrStaysBare(t *testing.T) {
+	planner := &LineFilterPlanner{
+		Main: staticPlanner{mockMain()},
+		Filter: &log_parser.LineFilter{
+			Fn: "|=",
+			Exp: log_parser.LineFilterExp{
+				Head: log_parser.LineFilterHead{
+					Simple: &log_parser.LineFilterSimple{Val: log_parser.QuotedString{Str: `"a"`}},
+				},
+				Op: "or",
+				Tail: &log_parser.LineFilterExp{
+					Head: log_parser.LineFilterHead{
+						Simple: &log_parser.LineFilterSimple{Val: log_parser.QuotedString{Str: `"b"`}},
+					},
+				},
+			},
+		},
+	}
+	sel, err := planner.Process(&shared.PlannerContext{})
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	got, err := sel.String(newCtx())
+	if err != nil {
+		t.Fatalf("String() error = %v", err)
+	}
+	if !strings.Contains(got, `(hasPhrase(samples.string, 'a')) or (hasPhrase(samples.string, 'b'))`) {
+		t.Fatalf("expected two bare hasPhrase disjuncts in:\n%s", got)
+	}
+	if strings.Contains(got, "== (1)") {
+		t.Fatalf("hasPhrase disjuncts must not be wrapped in `= 1`, got:\n%s", got)
+	}
+}
+
 // A |= value with no alphanumeric characters cannot form a phrase, so it falls
 // back to the original unprocessed substring LIKE.
 func TestLineFilterEqualsFallsBackToLike(t *testing.T) {
@@ -89,5 +139,10 @@ func TestLineFilterNotEqualsUnchanged(t *testing.T) {
 	got := lineFilterSQL(t, "!=", `"bar=baz"`)
 	if !strings.Contains(got, `notLike(samples.string, '%bar=baz%')`) {
 		t.Fatalf("expected != to stay notLike in:\n%s", got)
+	}
+	// SqlLike is emitted as a bare boolean predicate (no `= 1` wrapper), same as
+	// SqlHasPhrase.
+	if strings.Contains(got, "== (1)") || strings.Contains(got, "= 1") {
+		t.Fatalf("notLike must be a bare predicate, not wrapped in `= 1`, got:\n%s", got)
 	}
 }

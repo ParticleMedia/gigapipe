@@ -114,24 +114,21 @@ func (o *lineFilterOps) doLike(likeOp string) (sql.SQLCondition, error) {
 	enqVal = strings.Trim(enqVal, `'`)
 	enqVal = strings.Replace(enqVal, "%", "\\%", -1)
 	enqVal = strings.Replace(enqVal, "_", "\\_", -1)
-	return sql.Eq(
-		sql.NewRawObject(fmt.Sprintf("%s(samples.string, '%%%s%%')", likeOp, enqVal)), sql.NewIntVal(1),
-	), nil
+
+	return &SqlLike{
+		op:      likeOp,
+		col:     sql.NewRawObject("samples.string"),
+		pattern: "%" + enqVal + "%",
+	}, nil
 }
 
-// doHasPhrase optimizes a |= substring filter into a hasPhrase() token match.
-// The value is split on non-alphanumeric characters and rejoined with single
-// spaces so it aligns with ClickHouse's hasPhrase tokenization; unlike LIKE
-// '%val%', this matches on word boundaries (|= "bar" no longer matches "foobar").
-// A value with no alphanumeric characters falls back to the original LIKE.
 func (o *lineFilterOps) doHasPhrase() (sql.SQLCondition, error) {
 	phrase := splitOnNonAlphanumeric(o.val)
 	if phrase == "" {
 		return o.doLike("like")
 	}
-	return sql.Eq(
-		&SqlHasPhrase{col: sql.NewRawObject("samples.string"), phrase: phrase}, sql.NewIntVal(1),
-	), nil
+
+	return &SqlHasPhrase{col: sql.NewRawObject("samples.string"), phrase: phrase}, nil
 }
 
 // splitOnNonAlphanumeric trims surrounding whitespace, splits on every
@@ -154,7 +151,7 @@ func (o *lineFilterOps) re2Like() (string, bool, bool) {
 	if err != nil {
 		return "", false, false
 	}
-	if exp.Op != syntax.OpLiteral || exp.Flags& ^(syntax.PerlX|syntax.FoldCase) != 0 {
+	if exp.Op != syntax.OpLiteral || exp.Flags & ^(syntax.PerlX|syntax.FoldCase) != 0 {
 		return "", false, false
 	}
 	return string(exp.Rune), exp.Flags&syntax.FoldCase != 0, true
