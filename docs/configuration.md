@@ -89,6 +89,9 @@ the results back as new series. It is single-tenant and recording-only
 - **`QRYN_RULER_ENABLED`** - Enable the ruler (`1`, `true`, `yes`, `on`; default: disabled). When disabled, the rule endpoints (`/api/v1/rules`, `/loki/api/v1/rules`, `/api/prom/rules`) are **not** served and return `404`.
 - **`QRYN_RULER_POLL_INTERVAL`** - How often rule groups are reloaded from storage and rescheduled, as a Go duration (e.g. `15s`, `1m`; default: `30s`).
 - **`QRYN_RULER_MAX_LOGQL_RESULT_BYTES`** - Maximum size, in bytes, of a single LogQL recording-rule result buffered before parsing; a rule exceeding it fails that evaluation (default: `10485760`, i.e. 10 MiB).
+- **`QRYN_RULER_REMOTE_WRITE_URL`** - When set, recording-rule results are shipped to this external **Mimir-compatible** remote-write endpoint (Prometheus remote-write v1: protobuf + snappy), e.g. `http://mimir:9009/api/v1/push`, instead of being written back into gigapipe's in-process metrics pipeline. Unset (default): in-process write-back. There is no retry/queue; a failed push is logged and dropped.
+- **`QRYN_RULER_REMOTE_WRITE_TIMEOUT`** - Per-request HTTP timeout for remote-write, as a Go duration (e.g. `10s`, `1m`; default: `30s`). Only applies when `QRYN_RULER_REMOTE_WRITE_URL` is set.
+- **`QRYN_RULER_REMOTE_WRITE_TENANT`** - Static `X-Scope-OrgID` sent with remote-write requests when federation is **off** (for writing single-tenant gigapipe results into a multi-tenant Mimir). Unset: the header is omitted. When federation is **on**, the rule's own tenant (`oid`) is used and this variable is ignored.
 
 ## Self-Profiling
 

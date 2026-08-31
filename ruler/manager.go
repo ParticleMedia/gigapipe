@@ -124,7 +124,7 @@ func (m *RuleManager) updateRoutines(groups NamespaceRuleGroups) {
 	intervals := make(map[time.Duration]bool)
 	for _, gs := range groups {
 		for _, g := range gs {
-			d, err := time.ParseDuration(g.Interval)
+			d, err := g.EvalInterval()
 			if err != nil {
 				logger.Error("RuleManager: skipping group with invalid interval ", g.Name, ": ", err.Error())
 				continue
@@ -207,7 +207,7 @@ func (m *RuleManager) evaluateInterval(ctx context.Context, interval time.Durati
 	now := time.Now().UTC()
 	for namespace, gs := range groups {
 		for _, g := range gs {
-			d, err := time.ParseDuration(g.Interval)
+			d, err := g.EvalInterval()
 			if err != nil || d != interval {
 				continue
 			}

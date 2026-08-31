@@ -51,3 +51,7 @@ datasources:
     access: proxy
     uid: prometheus
     url: http://prometheus:9090
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: anonymous

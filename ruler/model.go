@@ -1,5 +1,12 @@
 package ruler
 
+import "time"
+
+// DefaultInterval is the evaluation interval applied to a rule group whose YAML
+// omits (or leaves empty) the interval field, matching Prometheus/Loki's own
+// default of evaluating groups once a minute.
+const DefaultInterval = time.Minute
+
 // Rule is a single recording or alerting rule within a RuleGroup.
 //
 // gigapipe only evaluates recording rules (non-empty Record). Alerting rules
@@ -33,6 +40,16 @@ type RuleGroup struct {
 	// group so the background evaluation loop knows which tenant to scope reads
 	// and write-back to.
 	Oid string `yaml:"-" json:"-"`
+}
+
+// EvalInterval resolves the group's evaluation interval, applying
+// DefaultInterval when the interval field is empty. A non-empty but malformed
+// interval returns a parse error so callers can skip the group.
+func (g RuleGroup) EvalInterval() (time.Duration, error) {
+	if g.Interval == "" {
+		return DefaultInterval, nil
+	}
+	return time.ParseDuration(g.Interval)
 }
 
 // NamespaceRuleGroups maps a namespace to its rule groups. It is the shape the

@@ -56,13 +56,25 @@ func maxLogQLResultBytes() int {
 	return 0
 }
 
-// Init wires the ruler into the unified binary: it builds the Loki and
-// Prometheus rule stores, evaluators, managers and HTTP routes, then starts the
-// managers. It is a no-op unless QRYN_RULER_ENABLED is set.
-//
-// It must be called after writer.Init and reader.Init so the writer's insert
-// registry / fingerprint cache / ClickHouse client and the reader's registry
-// are all ready.
+const defaultRemoteWriteTimeout = 30 * time.Second
+
+func remoteWriteURL() string {
+	return strings.TrimSpace(os.Getenv("QRYN_RULER_REMOTE_WRITE_URL"))
+}
+
+func remoteWriteTimeout() time.Duration {
+	if v := os.Getenv("QRYN_RULER_REMOTE_WRITE_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return defaultRemoteWriteTimeout
+}
+
+func remoteWriteTenant() string {
+	return strings.TrimSpace(os.Getenv("QRYN_RULER_REMOTE_WRITE_TENANT"))
+}
+
 func Init(cfg *clconfig.ClokiConfig, app *mux.Router) {
 	if !Enabled() {
 		return
@@ -78,8 +90,15 @@ func Init(cfg *clconfig.ClokiConfig, app *mux.Router) {
 
 	distributed := len(cfg.Setting.DATABASE_DATA) > 0 && cfg.Setting.DATABASE_DATA[0].ClusterName != ""
 	getClient := func() ruler.IChClient { return writercontroller.DbClient }
-	writeBack := ruler.NewInProcessWriter()
 	poll := pollInterval()
+
+	var writeBack ruler.RecordingRuleWriter
+	if url := remoteWriteURL(); url != "" {
+		writeBack = ruler.NewRemoteWriteWriter(url, remoteWriteTimeout(), remoteWriteTenant())
+		readerlogger.Info("Ruler: remote-write enabled -> ", url)
+	} else {
+		writeBack = ruler.NewInProcessWriter()
+	}
 
 	lokiService := ruler.NewRulerService(getClient, distributed, "loki")
 	promService := ruler.NewRulerService(getClient, distributed, "prom")
