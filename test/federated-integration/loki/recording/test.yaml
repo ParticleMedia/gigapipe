@@ -1,0 +1,10 @@
+namespace: test-rules
+groups:
+    - name: dummy-app
+      rules:
+        - record: dummy_platform_log_rate
+          expr: |-
+            sum(rate({service="dummy-app-platform"}[5m]))
+        - record: dummy_platform_error_ratio
+          expr: |-
+            sum(rate({service="dummy-app-platform", level="error"}[5m])) / sum(rate({service="dummy-app-platform"}[5m]))

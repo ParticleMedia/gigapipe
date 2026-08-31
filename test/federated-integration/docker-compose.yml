@@ -114,6 +114,36 @@ services:
       - "3101:3100"
     restart: unless-stopped
 
+  # 2a. Ruler. Runs the unified binary in MODE=all so the ruler actually boots
+  #     (it only starts under MODE=all — see the note on QRYN_RULER_ENABLED),
+  #     alongside an in-process writer/reader. OMIT_CREATE_TABLES=true skips
+  #     schema migration: the writer (service 1) already created the federated
+  #     schema, and the rules table lives there too, so this service must start
+  #     after the writer and never migrate itself. Shares the built image.
+  gigapipe-ruler:
+    image: gigapipe:federated-integration
+    pull_policy: never
+    container_name: gigapipe-ruler
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      gigapipe-writer:
+        condition: service_started
+    environment:
+      <<: *clickhouse-env
+      MODE: all
+      OMIT_CREATE_TABLES: "true"
+      PORT: "3100"
+      QRYN_RULER_ENABLED: "true"
+      QRYN_RULER_REMOTE_WRITE_URL: "http://prometheus:9090/api/v1/write"
+      QRYN_RULER_REMOTE_WRITE_TIMEOUT: 10s
+
+    networks: [federated]
+    ports:
+      # Ruler (all-in-one) API on host 0.0.0.0:3102.
+      - "3102:3100"
+    restart: unless-stopped
+
   # 3. Dummy application for a platform team app: appends structured log lines to a shared volume that
   #    Alloy tails. Levels rotate info/warn/error so queries have variety.
   #    $$ escapes the $ so Docker Compose does not interpolate it; the container
@@ -199,6 +229,11 @@ services:
     networks: [federated]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    # Enable the remote-write receiver so the ruler can POST recording-rule
+    # results to /api/v1/write (off by default in the stock image).
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
     ports:
       # Prometheus UI/API on the standard host port 0.0.0.0:9090.
       - "9090:9090"
