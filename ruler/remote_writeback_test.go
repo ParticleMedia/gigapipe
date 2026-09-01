@@ -123,18 +123,20 @@ func TestRemoteWrite_Non2xxReturnsError(t *testing.T) {
 	}
 }
 
-func TestRemoteWrite_StaticTenantHeader(t *testing.T) {
-	// Federation is off in tests, so the static tenant supplies X-Scope-OrgID.
+func TestRemoteWrite_StaticTenantOverridesOid(t *testing.T) {
+	// A configured static tenant is an explicit override: it supplies the
+	// destination X-Scope-OrgID and the per-rule source oid is ignored, so the
+	// Mimir tenant is decoupled from the (multi-tenant) Loki source tenant.
 	var c capture
 	srv := newFakeMimir(t, &c, http.StatusOK)
 	defer srv.Close()
 
-	w := NewRemoteWriteWriter(srv.URL, 5*time.Second, "team-a")
-	if err := w.Write("ignored-oid", "r", nil, sampleVector()); err != nil {
+	w := NewRemoteWriteWriter(srv.URL, 5*time.Second, "anonymous")
+	if err := w.Write("some-source-tenant", "r", nil, sampleVector()); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	if got := c.headers.Get("X-Scope-OrgID"); got != "team-a" {
-		t.Errorf("X-Scope-OrgID = %q, want team-a", got)
+	if got := c.headers.Get("X-Scope-OrgID"); got != "anonymous" {
+		t.Errorf("X-Scope-OrgID = %q, want anonymous (static tenant overrides oid)", got)
 	}
 }
 

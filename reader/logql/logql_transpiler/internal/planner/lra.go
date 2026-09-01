@@ -41,14 +41,15 @@ func (l *LRAPlanner) addValue(ctx *shared.PlannerContext, entry *shared.LogEntry
 }
 
 func (l *LRAPlanner) finalize(ctx *shared.PlannerContext, stream *aggOpStream) {
+	d := l.Duration.Nanoseconds()
 	switch l.Func {
-	case "rate":
+	case "rate", "bytes_rate":
 		for i := 0; i < len(stream.values); i += 2 {
-			stream.values[i] /= float64(l.Duration.Milliseconds()) / 1000
+			stream.values[i] /= float64(coveredNs(ctx, i/2, l.Duration)) / 1e9
 		}
-	case "bytes_rate":
+	case "count_over_time", "bytes_over_time":
 		for i := 0; i < len(stream.values); i += 2 {
-			stream.values[i] /= float64(l.Duration.Milliseconds()) / 1000
+			stream.values[i] *= float64(d) / float64(coveredNs(ctx, i/2, l.Duration))
 		}
 	}
 }

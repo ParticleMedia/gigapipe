@@ -73,8 +73,12 @@ func (w *remoteWriteWriter) Write(oid, record string, ruleLabels map[string]stri
 }
 
 func (w *remoteWriteWriter) tenant(oid string) string {
+	if w.staticTenant != "" {
+		return w.staticTenant
+	}
+
 	if federation.Enabled() && oid != "" {
 		return oid
 	}
-	return w.staticTenant
+	return ""
 }

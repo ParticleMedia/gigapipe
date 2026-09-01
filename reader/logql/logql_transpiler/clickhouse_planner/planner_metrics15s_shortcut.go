@@ -63,14 +63,27 @@ func (m *Metrics15ShortcutPlanner) GetQuery(ctx *shared.PlannerContext, col sql.
 }
 
 func (m *Metrics15ShortcutPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect, error) {
+	from := ctx.From
+	to := ctx.To
+	offsetNsStr := ""
+	var offsetNs int64
+	if m.Offset != nil {
+		from = from.Add(*m.Offset)
+		to = to.Add(*m.Offset)
+		offsetNs = m.Offset.Nanoseconds()
+		offsetNsStr = fmt.Sprintf(" + %d", offsetNs)
+	}
+	bucketStart := fmt.Sprintf("intDiv(samples.timestamp_ns%s, %d) * %[2]d", offsetNsStr, m.Duration.Nanoseconds())
+	fromNs := from.UnixNano()/15000000000*15000000000 + offsetNs
+	toNs := to.UnixNano()/15000000000*15000000000 + offsetNs
+	covered := coveredNsExprBounds(bucketStart, m.Duration, fromNs, toNs)
+
 	var col sql.SQLObject
 	switch m.Function {
 	case "rate":
-		col = sql.NewRawObject(
-			fmt.Sprintf("toFloat64(countMerge(count)) / %f",
-				float64(m.Duration.Milliseconds())/1000))
+		col = sql.NewRawObject(rateValueExpr("toFloat64(countMerge(count))", covered))
 	case "count_over_time":
-		col = sql.NewRawObject("countMerge(count)")
+		col = sql.NewRawObject(totalValueExpr("toFloat64(countMerge(count))", covered, m.Duration))
 	}
 	v1 := m.GetQuery(ctx, col, ctx.Metrics15sDistTableName)
 	return v1, nil

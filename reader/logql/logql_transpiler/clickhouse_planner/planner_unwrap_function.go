@@ -13,6 +13,7 @@ type UnwrapFunctionPlanner struct {
 	Func       string
 	Duration   time.Duration
 	WithLabels bool
+	Offset     *time.Duration
 }
 
 func (u *UnwrapFunctionPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect, error) {
@@ -23,13 +24,15 @@ func (u *UnwrapFunctionPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect
 
 	withMain := sql.NewWith(main, "unwrap_1")
 
+	bucketStart := fmt.Sprintf("intDiv(timestamp_ns, %d) * %[1]d", u.Duration.Nanoseconds())
+	covered := coveredNsExpr(ctx, bucketStart, u.Duration, u.Offset)
+
 	var val sql.SQLObject
 	switch u.Func {
 	case "rate":
-		val = sql.NewRawObject(fmt.Sprintf("sum(unwrap_1.value) / %f",
-			float64(u.Duration.Milliseconds())/1000))
+		val = sql.NewRawObject(rateValueExpr("sum(unwrap_1.value)", covered))
 	case "sum_over_time":
-		val = sql.NewRawObject("sum(unwrap_1.value)")
+		val = sql.NewRawObject(totalValueExpr("sum(unwrap_1.value)", covered, u.Duration))
 	case "avg_over_time":
 		val = sql.NewRawObject("avg(unwrap_1.value)")
 	case "max_over_time":

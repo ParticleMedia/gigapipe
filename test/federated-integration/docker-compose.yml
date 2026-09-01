@@ -96,6 +96,9 @@ services:
   # 2. Query layer (reader). Shares the image built by the writer; starts after
   #    the writer so the schema already exists (the reader does not migrate).
   gigapipe-reader:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     image: gigapipe:federated-integration
     pull_policy: never
     container_name: gigapipe-reader
@@ -121,7 +124,9 @@ services:
   #     schema, and the rules table lives there too, so this service must start
   #     after the writer and never migrate itself. Shares the built image.
   gigapipe-ruler:
-    image: gigapipe:federated-integration
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     pull_policy: never
     container_name: gigapipe-ruler
     depends_on:
@@ -137,6 +142,7 @@ services:
       QRYN_RULER_ENABLED: "true"
       QRYN_RULER_REMOTE_WRITE_URL: "http://prometheus:9090/api/v1/write"
       QRYN_RULER_REMOTE_WRITE_TIMEOUT: 10s
+      QRYN_RULER_REMOTE_WRITE_TENANT: "anonymous"
 
     networks: [federated]
     ports:

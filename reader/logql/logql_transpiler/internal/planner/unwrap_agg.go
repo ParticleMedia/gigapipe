@@ -53,8 +53,16 @@ func (l *UnwrapAggPlanner) addValue(ctx *shared.PlannerContext, entry *shared.Lo
 func (l *UnwrapAggPlanner) finalize(ctx *shared.PlannerContext, stream *aggOpStream) {
 	switch l.Function {
 	case "rate":
+		// Normalize by the bin's actually-covered span rather than the fixed
+		// window width (see coverage.go).
 		for i := 0; i < len(stream.values); i += 2 {
-			stream.values[i] /= float64(l.Duration.Milliseconds()) / 1000
+			stream.values[i] /= float64(coveredNs(ctx, i/2, l.Duration)) / 1e9
+		}
+	case "sum_over_time":
+		// Extrapolate the partial bin's total to a full-window estimate.
+		d := l.Duration.Nanoseconds()
+		for i := 0; i < len(stream.values); i += 2 {
+			stream.values[i] *= float64(d) / float64(coveredNs(ctx, i/2, l.Duration))
 		}
 	case "avg_over_time":
 		for i := 0; i < len(stream.values); i += 2 {
