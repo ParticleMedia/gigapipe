@@ -41,10 +41,6 @@ func (l *LRAPlanner) addValue(ctx *shared.PlannerContext, entry *shared.LogEntry
 }
 
 func (l *LRAPlanner) finalize(ctx *shared.PlannerContext, stream *aggOpStream) {
-	// Normalize each bin by the time it actually covers within [From, To) rather
-	// than the fixed window width (see coverage.go): rate-form divides the count by
-	// the covered seconds, total-form extrapolates the partial bin to a full-window
-	// estimate. Interior bins cover the full width, so both leave them unchanged.
 	d := l.Duration.Nanoseconds()
 	switch l.Func {
 	case "rate", "bytes_rate":

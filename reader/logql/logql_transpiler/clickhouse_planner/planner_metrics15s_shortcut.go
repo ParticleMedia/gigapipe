@@ -63,10 +63,6 @@ func (m *Metrics15ShortcutPlanner) GetQuery(ctx *shared.PlannerContext, col sql.
 }
 
 func (m *Metrics15ShortcutPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect, error) {
-	// Normalize by the bin's actually-covered span rather than the fixed window
-	// width (see coverage.go). The bucket key and scan bounds here are floored to
-	// 15s and expressed in offset-shifted timestamp space, so we compute covered
-	// with matching bounds instead of the generic ctx.From/To helper.
 	from := ctx.From
 	to := ctx.To
 	offsetNsStr := ""
@@ -78,8 +74,6 @@ func (m *Metrics15ShortcutPlanner) Process(ctx *shared.PlannerContext) (sql.ISel
 		offsetNsStr = fmt.Sprintf(" + %d", offsetNs)
 	}
 	bucketStart := fmt.Sprintf("intDiv(samples.timestamp_ns%s, %d) * %[2]d", offsetNsStr, m.Duration.Nanoseconds())
-	// Scan bounds are floored to 15s on raw timestamp_ns; shift into the
-	// (timestamp_ns + offset) space the bucket key lives in.
 	fromNs := from.UnixNano()/15000000000*15000000000 + offsetNs
 	toNs := to.UnixNano()/15000000000*15000000000 + offsetNs
 	covered := coveredNsExprBounds(bucketStart, m.Duration, fromNs, toNs)

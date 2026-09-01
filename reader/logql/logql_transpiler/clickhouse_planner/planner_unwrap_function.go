@@ -24,8 +24,6 @@ func (u *UnwrapFunctionPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect
 
 	withMain := sql.NewWith(main, "unwrap_1")
 
-	// Normalize by the bin's actually-covered span rather than the fixed window
-	// width (see coverage.go). Bucket-start matches the timestamp_ns group key.
 	bucketStart := fmt.Sprintf("intDiv(timestamp_ns, %d) * %[1]d", u.Duration.Nanoseconds())
 	covered := coveredNsExpr(ctx, bucketStart, u.Duration, u.Offset)
 
