@@ -351,6 +351,7 @@ func (p *planner) planLRA(lra *logql_parser.LRAOrUnwrap) error {
 		Duration:   duration,
 		Func:       lra.Fn,
 		WithLabels: p.labelsJoinIdx != -1,
+		Offset:     p.offsetModifier,
 	}
 	return nil
 }
@@ -368,6 +369,7 @@ func (p *planner) planUnwrapFn(lra *logql_parser.LRAOrUnwrap) error {
 		Main:     p.samplesPlanner,
 		Func:     lra.Fn,
 		Duration: duration,
+		Offset:   p.offsetModifier,
 	}
 	return nil
 }

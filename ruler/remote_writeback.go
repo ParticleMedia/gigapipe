@@ -73,8 +73,17 @@ func (w *remoteWriteWriter) Write(oid, record string, ruleLabels map[string]stri
 }
 
 func (w *remoteWriteWriter) tenant(oid string) string {
+	// A configured static tenant is an explicit override: it fixes the
+	// destination X-Scope-OrgID for every remote-write request, decoupling the
+	// Mimir (destination) tenant from the source (Loki) tenant. This lets reads
+	// stay multi-tenant — each rule is still evaluated scoped to its own oid —
+	// while all recorded series land under a single Mimir tenant.
+	if w.staticTenant != "" {
+		return w.staticTenant
+	}
+	// Otherwise, under federation, mirror the source tenant onto the destination.
 	if federation.Enabled() && oid != "" {
 		return oid
 	}
-	return w.staticTenant
+	return ""
 }

@@ -13,6 +13,7 @@ type LRAPlanner struct {
 	Duration   time.Duration
 	Func       string
 	WithLabels bool
+	Offset     *time.Duration
 }
 
 func (l *LRAPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect, error) {
@@ -32,19 +33,23 @@ func (l *LRAPlanner) Process(ctx *shared.PlannerContext) (sql.ISelect, error) {
 		}
 	}
 
+	// Normalize by the bin's actually-covered span rather than the fixed window
+	// width, so a partial leading/trailing bin is not under-reported (see
+	// coverage.go). The bucket-start expression matches the timestamp_ns group key
+	// below.
+	bucketStart := fmt.Sprintf("intDiv(time_series.timestamp_ns, %d) * %[1]d", l.Duration.Nanoseconds())
+	covered := coveredNsExpr(ctx, bucketStart, l.Duration, l.Offset)
+
 	var col sql.SQLObject
 	switch l.Func {
 	case "rate":
-		col = sql.NewRawObject(fmt.Sprintf("toFloat64(COUNT()) / %f",
-			float64(l.Duration.Milliseconds())/1000))
+		col = sql.NewRawObject(rateValueExpr("toFloat64(COUNT())", covered))
 	case "count_over_time":
-		col = sql.NewRawObject("toFloat64(COUNT())")
+		col = sql.NewRawObject(totalValueExpr("toFloat64(COUNT())", covered, l.Duration))
 	case "bytes_rate":
-		col = sql.NewRawObject(fmt.Sprintf("toFloat64(sum(length(_string))) / %f",
-			float64(l.Duration.Milliseconds())/1000))
+		col = sql.NewRawObject(rateValueExpr("toFloat64(sum(length(_string)))", covered))
 	case "bytes_over_time":
-		col = sql.NewRawObject(fmt.Sprintf("toFloat64(sum(length(_string))) / %f",
-			float64(l.Duration.Milliseconds())/1000))
+		col = sql.NewRawObject(totalValueExpr("toFloat64(sum(length(_string)))", covered, l.Duration))
 	}
 
 	withAgg := sql.NewWith(main, "agg_a")
