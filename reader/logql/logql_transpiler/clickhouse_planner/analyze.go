@@ -115,14 +115,12 @@ func AnalyzeMetrics15sShortcut(script *logql_parser.LogQLScript) bool {
 		lraOrUnwrap.StrSel.Pipelines[len(lraOrUnwrap.StrSel.Pipelines)-1].Unwrap != nil {
 		return false
 	}
+	parserSeen := false
 	for _, ppl := range lraOrUnwrap.StrSel.Pipelines {
 		if ppl.Parser != nil {
 			return false
 		}
-		if ppl.Drop != nil {
-			return false
-		}
-		if ppl.Keep != nil {
+		if (ppl.Drop != nil || ppl.Keep != nil) && parserSeen {
 			return false
 		}
 		if ppl.LineFilter != nil && lineFilterHasContent(ppl.LineFilter) {
