@@ -103,6 +103,17 @@ func portCHEnv(cfg *clconfig.ClokiConfig) error {
 		server = os.Getenv("CLICKHOUSE_SERVER")
 	}
 	cfg.Setting.DATABASE_DATA[0].Host = server
+	// Loki local-shard writes (opt-in) require a sharded cluster: CLUSTER_NAME
+	// selects the cluster to shard across and CLICKHOUSE_SERVER the seed used to
+	// discover it. Fail fast here rather than silently falling back to `_dist`.
+	if ls := strings.ToLower(strings.TrimSpace(os.Getenv("CLICKHOUSE_LOCAL_SHARD_WRITES"))); ls == "1" || ls == "true" || ls == "on" || ls == "yes" {
+		if os.Getenv("CLUSTER_NAME") == "" {
+			return fmt.Errorf("CLICKHOUSE_LOCAL_SHARD_WRITES is set but CLUSTER_NAME is empty; local-shard writes require a sharded cluster")
+		}
+		if os.Getenv("CLICKHOUSE_SERVER") == "" {
+			return fmt.Errorf("CLICKHOUSE_LOCAL_SHARD_WRITES is set but CLICKHOUSE_SERVER is empty; a seed host is required for shard discovery")
+		}
+	}
 	// TODO: add to readme to change port to tcp (9000) instead of http
 	strPort := "9000"
 	if os.Getenv("CLICKHOUSE_PORT") != "" {

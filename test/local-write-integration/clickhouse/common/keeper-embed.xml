@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+  Embedded single-node ClickHouse Keeper. Mounted ONLY on ch-s1r1 (see
+  docker-compose.yml). It backs the distributed-DDL queue (ON CLUSTER) and
+  ReplicatedMergeTree coordination for all six nodes, which all point their
+  <zookeeper> at ch-s1r1:9181 (see zookeeper.xml). Single node = not HA, fine
+  for a test. Uses the stock clickhouse-server image (no separate keeper image).
+-->
+<clickhouse>
+    <keeper_server>
+        <tcp_port>9181</tcp_port>
+        <server_id>1</server_id>
+        <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+        <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <session_timeout_ms>30000</session_timeout_ms>
+            <raft_logs_level>warning</raft_logs_level>
+        </coordination_settings>
+        <raft_configuration>
+            <server>
+                <id>1</id>
+                <hostname>ch-s1r1</hostname>
+                <port>9234</port>
+            </server>
+        </raft_configuration>
+    </keeper_server>
+</clickhouse>

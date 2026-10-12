@@ -29,6 +29,18 @@ The container image is published to `ghcr.io/metrico/gigapipe:latest` with multi
 - **`CLUSTER_NAME`** - Enables clustered mode and sets the cluster name. When set, gigapipe operates in distributed mode.
 - **`CLICKHOUSE_READ_DIST_SUFFIX`** - Suffix for read-path distributed tables (default: `_dist`). Used for cross-cluster reads in multi-cluster deployments. See [Cross-Cluster Deployment](#cross-cluster-deployment) below.
 
+## Loki Local-Shard Writes
+
+- **`CLICKHOUSE_LOCAL_SHARD_WRITES`** - Opt-in (default off). When enabled, the **writer** stops handing Loki log rows to the ClickHouse `_dist` Distributed engine and instead writes each row directly to the **local** `time_series` / `samples_v3` tables of shard `fingerprint % shardCount`. Requires `CLUSTER_NAME` (the cluster to shard across) and `CLICKHOUSE_SERVER` (the write endpoint); the process refuses to start without them rather than silently falling back to `_dist`.
+  - **Writes only ever go to the `CLICKHOUSE_SERVER` IPs.** `system.clusters` is used only to learn which `shard_num` each node belongs to; the per-shard write target is then restricted to replicas whose address is in the DNS resolution of `CLICKHOUSE_SERVER`. Cluster nodes that appear in the topology but are **not** in that DNS set never receive writes. If any shard has no replica in the `CLICKHOUSE_SERVER` set, the writer refuses to start (it will not route that shard's writes to a non-write node). The write set is re-resolved on each topology refresh.
+- **`CLICKHOUSE_SHARD_REFRESH_INTERVAL`** - Bounded interval for re-polling `system.clusters` (Go duration, default `1m`; `0` disables refresh).
+
+Notes:
+
+- **Reads are unchanged.** Queries keep using the `_dist` tables, which scatter to every shard's local table and merge — so locally-placed rows are read back identically, and `CLICKHOUSE_READ_DIST_SUFFIX` still applies to all reads. There is no read-side collision with the cross-cluster suffix.
+- `time_series_gin` and `metrics_15s` are **not** written directly; they are produced by local materialized views from `time_series` / `samples_v3`, so they co-shard automatically. Loki `patterns` stay on `patterns_dist`.
+- **Shard addition** is picked up automatically on the next topology refresh (new writes route under the new count). A **shard-count change is held**, not applied live, because `fingerprint % N` remapping requires an operator-coordinated cutover; migration/rebalancing of historical data on shard removal is an operator task.
+
 ## Authentication
 
 - **`QRYN_LOGIN`** - Username for HTTP basic authentication

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!--
+  Point every ClickHouse node at the embedded Keeper running on ch-s1r1 (see
+  keeper-embed.xml, mounted only there). Keeper backs the distributed-DDL queue
+  (ON CLUSTER) and ReplicatedMergeTree replication, so all six nodes share it.
+  Merged into every node's config.d.
+-->
+<clickhouse>
+    <zookeeper>
+        <node>
+            <host>ch-s1r1</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+</clickhouse>

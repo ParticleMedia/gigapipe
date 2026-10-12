@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+  4-shard variant of the `default` cluster, swapped over remote_servers.xml at
+  demo time to make system.clusters report shard 4. ClickHouse hot-reloads
+  config.d on change, so every running node picks this up without a restart.
+-->
+<clickhouse>
+    <remote_servers replace="replace">
+        <default>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s1r1</host><port>9000</port></replica>
+                <replica><host>ch-s1r2</host><port>9000</port></replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s2r1</host><port>9000</port></replica>
+                <replica><host>ch-s2r2</host><port>9000</port></replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s3r1</host><port>9000</port></replica>
+                <replica><host>ch-s3r2</host><port>9000</port></replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s4r1</host><port>9000</port></replica>
+                <replica><host>ch-s4r2</host><port>9000</port></replica>
+                <replica><host>ch-s4r3</host><port>9000</port></replica>
+            </shard>
+        </default>
+    </remote_servers>
+</clickhouse>

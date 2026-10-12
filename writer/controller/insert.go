@@ -50,6 +50,7 @@ func PushStreamV2(cfg MiddlewareConfig) func(w http.ResponseWriter, r *http.Requ
 	return Build(
 		append(cfg.ExtraMiddleware, // controller.WithOverallContextMiddleware (applies prerequest to extract and propagate request header values in context)
 			withTSAndSampleService, // controller.withTSAndSampleService (applies prerequest to extract and propagate insertion services in context)
+			withLokiShardMarker,    // controller.withLokiShardMarker (marks this request eligible for Loki local-shard routing)
 			withSimpleParser("*", Parser(unmarshal.DecodePushRequestStringV2)), // Defines simple parser for all Content-Types (*) and enriches context with simple parser instantiation for logs
 			withComplexParser("application/x-protobuf", // Defines complex parser for Protobuf type and enriches context with protobuf parser instantation for logs
 				Parser(unmarshal.UnmarshalProtoV2),

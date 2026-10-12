@@ -206,6 +206,7 @@ func doParse(r *http.Request, parser Parser) error {
 	spansService := getService(r, utils.ContextKeySpansService)
 	profileService := getService(r, utils.ContextKeyProfileService)
 	node := r.Context().Value(utils.ContextKeyNode).(string)
+	shardRoute := shardRoutingActive(r.Context())
 
 	//var promises []chan error
 	var promises []*promise.Promise[uint32]
@@ -220,9 +221,16 @@ func doParse(r *http.Request, parser Parser) error {
 			return response.Error
 		}
 
+		if shardRoute {
+			promises = append(promises, pushShardedTimeSeries(response.TimeSeriesRequest)...)
+			promises = append(promises, pushShardedSamples(response.SamplesRequest)...)
+		} else {
+			promises = append(promises,
+				doPush(response.TimeSeriesRequest, service.INSERT_MODE_SYNC, tsService),
+				doPush(response.SamplesRequest, service.INSERT_MODE_SYNC, splService),
+			)
+		}
 		promises = append(promises,
-			doPush(response.TimeSeriesRequest, service.INSERT_MODE_SYNC, tsService),
-			doPush(response.SamplesRequest, service.INSERT_MODE_SYNC, splService),
 			doPush(response.SpansAttrsRequest, service.INSERT_MODE_SYNC, spanAttrsService),
 			doPush(response.SpansRequest, service.INSERT_MODE_SYNC, spansService),
 			doPush(response.ProfileRequest, service.INSERT_MODE_SYNC, profileService),

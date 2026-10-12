@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!--
+  Bind on all interfaces (IPv4 + IPv6). Merged into every node's config.d.
+-->
+<clickhouse>
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>

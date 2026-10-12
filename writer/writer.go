@@ -33,6 +33,7 @@ func Init(cfg *clconfig.ClokiConfig, router *mux.Router) {
 
 func Stop() {
 	logger.Info("Stopping Writer module...")
+	plugin.StopLokiShardWrites()
 	if qrynPlugin != nil {
 		if err := qrynPlugin.Stop(); err != nil {
 			logger.Error("Error during writer module shutdown:", err)

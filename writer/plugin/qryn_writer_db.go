@@ -235,6 +235,12 @@ func (p *QrynWriterPlugin) CreateStaticServiceRegistry(config config.ClokiBaseSe
 		return unsafe.Slice((*byte)(unsafe.Pointer(&val)), 8)
 	}, databasesNodeHashMap)
 
+	// Loki local-shard writes (opt-in): build per-shard LOCAL-table services and
+	// register them with the watchdog alongside the standard services. These are
+	// routed to directly by fingerprint %% N and are intentionally kept out of
+	// the random service registry used by the non-Loki write paths.
+	shardTsSvcs, shardSplSvcs := p.buildLokiShardServices(config)
+
 	watchdog.Init([]service.InsertSvcMap{
 		TsSvcs,
 		SplSvcs,
@@ -243,6 +249,8 @@ func (p *QrynWriterPlugin) CreateStaticServiceRegistry(config config.ClokiBaseSe
 		TempoTagsSvcs,
 		ProfileInsertSvcs,
 		PatternInsertSvcs,
+		shardTsSvcs,
+		shardSplSvcs,
 	})
 
 	if config2.Cloki.Setting.DRILLDOWN_SETTINGS.LogDrilldown {
