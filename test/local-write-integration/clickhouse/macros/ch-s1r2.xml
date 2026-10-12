@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- Macros for ch-s1r2: shard 01, this node is replica r2. {shard}/{replica} feed the
+     default ReplicatedMergeTree zk path (/clickhouse/tables/{uuid}/{shard}, replica {replica}). -->
+<clickhouse>
+    <macros>
+        <cluster>default</cluster>
+        <shard>01</shard>
+        <replica>ch-s1r2</replica>
+    </macros>
+</clickhouse>

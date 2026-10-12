@@ -1,0 +1,514 @@
+# Shared gigapipe -> ClickHouse env. CLICKHOUSE_SERVER is intentionally NOT here:
+# the writer must point at the write subset (ch-write), while the reader can use
+# any cluster node for its `_dist` scatter (ch-read), so each sets its own.
+x-gigapipe-ch-env: &gigapipe-ch-env
+  CLICKHOUSE_PORT: "9000"
+  CLICKHOUSE_PROTO: tcp
+  CLICKHOUSE_DB: gigapipe
+  CLUSTER_NAME: default
+  FEDERATED: "1"
+
+x-clickhouse: &clickhouse
+  image: clickhouse/clickhouse-server:26.7
+  environment:
+    CLICKHOUSE_SKIP_USER_SETUP: 1
+  ulimits:
+    nofile:
+      soft: 262144
+      hard: 262144
+  healthcheck:
+    test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+    interval: 3s
+    timeout: 3s
+    retries: 40
+    start_period: 20s
+  restart: unless-stopped
+
+networks:
+  lwi:
+    driver: bridge
+
+volumes:
+  ch_s1r1: {}
+  ch_s1r2: {}
+  ch_s2r1: {}
+  ch_s2r2: {}
+  ch_s3r1: {}
+  ch_s3r2: {}
+  ch_s4r1: {}
+  ch_s4r2: {}
+  ch_s4r3: {}
+  applogs-platform: {}
+  applogs-data: {}
+  alloydata: {}
+  nginxlogs: {}
+
+services:
+  # ---------------------------------------------------------------------------
+  # Coordination + storage layer
+  # ---------------------------------------------------------------------------
+
+  # Shard 1 — write replica (in the `ch-write` set). Also hosts the embedded
+  # Keeper (keeper-embed.xml) that the whole cluster points its <zookeeper> at,
+  # so it starts first and the other five nodes depend on it.
+  ch-s1r1:
+    <<: *clickhouse
+    container_name: ch-s1r1
+    hostname: ch-s1r1
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/common/keeper-embed.xml:/etc/clickhouse-server/config.d/keeper.xml:ro
+      - ./clickhouse/macros/ch-s1r1.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s1r1:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-write, ch-read]
+    ports: ["9001:9000", "8201:8123"]
+
+  # Shard 1 — replica-only (NOT in the write set; filled by replication).
+  ch-s1r2:
+    <<: *clickhouse
+    container_name: ch-s1r2
+    hostname: ch-s1r2
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s1r2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s1r2:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-read]
+    ports: ["9002:9000", "8202:8123"]
+
+  # Shard 2 — write replica.
+  ch-s2r1:
+    <<: *clickhouse
+    container_name: ch-s2r1
+    hostname: ch-s2r1
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s2r1.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s2r1:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-write, ch-read]
+    ports: ["9003:9000", "8203:8123"]
+
+  # Shard 2 — replica-only.
+  ch-s2r2:
+    <<: *clickhouse
+    container_name: ch-s2r2
+    hostname: ch-s2r2
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s2r2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s2r2:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-read]
+    ports: ["9004:9000", "8204:8123"]
+
+  # Shard 3 — write replica.
+  ch-s3r1:
+    <<: *clickhouse
+    container_name: ch-s3r1
+    hostname: ch-s3r1
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s3r1.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s3r1:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-write, ch-read]
+    ports: ["9005:9000", "8205:8123"]
+
+  # Shard 3 — replica-only.
+  ch-s3r2:
+    <<: *clickhouse
+    container_name: ch-s3r2
+    hostname: ch-s3r2
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s3r2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s3r2:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-read]
+    ports: ["9006:9000", "8206:8123"]
+
+  # Shard 4 — ADDED LIVE to exercise topology-discovery polling. This node is the
+  # write replica (carries the `ch-write` alias, so once it is up `ch-write`
+  # resolves to 4 IPs and shardtopo treats shard 4 as write-eligible). It is
+  # intentionally NOT in gigapipe-writer's depends_on: the writer boots against
+  # the 3-shard cluster, then this node is started afterwards so the writer's
+  # refresh loop (CLICKHOUSE_SHARD_REFRESH_INTERVAL) observes the 3 -> 4 change.
+  ch-s4r1:
+    <<: *clickhouse
+    container_name: ch-s4r1
+    hostname: ch-s4r1
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s4r1.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s4r1:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-write, ch-read]
+    ports: ["9007:9000", "8207:8123"]
+
+  ch-s4r2:
+    <<: *clickhouse
+    container_name: ch-s4r2
+    hostname: ch-s4r2
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s4r2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s4r2:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-write, ch-read]
+    ports: ["9008:9000", "8208:8123"]
+
+  # Shard 4 — replica-only (filled by replication).
+  ch-s4r3:
+    <<: *clickhouse
+    container_name: ch-s4r3
+    hostname: ch-s4r3
+    depends_on:
+      ch-s1r1:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/common/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./clickhouse/common/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./clickhouse/common/remote_servers.4shard.xml:/etc/clickhouse-server/config.d/remote_servers.xml:ro
+      - ./clickhouse/macros/ch-s4r3.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ch_s4r3:/var/lib/clickhouse
+    networks:
+      lwi:
+        aliases: [ch-read]
+    ports: ["9009:9000", "8209:8123"]
+
+  # ---------------------------------------------------------------------------
+  # gigapipe schema init / writer / reader
+  # ---------------------------------------------------------------------------
+
+  # One-shot schema initializer. Waits for EVERY ClickHouse shard + replica to be
+  # healthy, then runs gigapipe with MODE=init_only, which executes the ON CLUSTER
+  # schema migrations (CREATE ... ON CLUSTER default) and exits (main.go returns
+  # right after initDB in init_only mode). gigapipe-writer blocks on this finishing
+  # successfully, so the writer never starts against an un-migrated cluster — and on
+  # a fresh bring-up the schema is created on all shards, including shard 4, before
+  # any writes are routed.
+  gigapipe-init-schema:
+    image: gigapipe:local-write-integration
+    pull_policy: never
+    container_name: gigapipe-init-schema
+    depends_on:
+      ch-s1r1: { condition: service_healthy }
+      ch-s1r2: { condition: service_healthy }
+      ch-s2r1: { condition: service_healthy }
+      ch-s2r2: { condition: service_healthy }
+      ch-s3r1: { condition: service_healthy }
+      ch-s3r2: { condition: service_healthy }
+      ch-s4r1: { condition: service_healthy }
+      ch-s4r2: { condition: service_healthy }
+      ch-s4r3: { condition: service_healthy }
+    environment:
+      <<: *gigapipe-ch-env
+      CLICKHOUSE_SERVER: ch-write
+      MODE: init_only
+      PORT: "3100"
+    networks: [lwi]
+    restart: "no"
+
+  # Ingestion (writer). Blocks until gigapipe-init-schema has completed, so the
+  # schema is guaranteed present; then accepts pushes and routes them to per-shard
+  # LOCAL tables by fingerprint % N.
+  gigapipe-writer:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: gigapipe:local-write-integration
+    container_name: gigapipe-writer
+    depends_on:
+      gigapipe-init-schema:
+        condition: service_completed_successfully
+    environment:
+      <<: *gigapipe-ch-env
+      # Writes go ONLY to the write subset (one replica per shard).
+      CLICKHOUSE_SERVER: ch-write
+      MODE: writer
+      PORT: "3100"
+      # The opt-in: write Loki rows to local shard tables instead of `_dist`.
+      CLICKHOUSE_LOCAL_SHARD_WRITES: "true"
+      CLICKHOUSE_SHARD_REFRESH_INTERVAL: "30s"
+      # Flush ingested logs quickly so queries see data within ~1s.
+      BULK_MAX_AGE_MS: "1000"
+    networks: [lwi]
+    ports: ["3100:3100"]
+    restart: unless-stopped
+
+  # Query (reader). Unchanged: reads the `_dist` tables. Starts after the writer
+  # so the schema exists (the reader does not migrate).
+  gigapipe-reader:
+    image: gigapipe:local-write-integration
+    pull_policy: never
+    container_name: gigapipe-reader
+    depends_on:
+      gigapipe-writer:
+        condition: service_started
+    environment:
+      <<: *gigapipe-ch-env
+      # Reads go through the `_dist` Distributed engine, which can scatter from
+      # ANY cluster node — so the reader uses ch-read (all 6 nodes), not the
+      # write-only subset.
+      CLICKHOUSE_SERVER: ch-read
+      MODE: reader
+      PORT: "3100"
+    networks: [lwi]
+    ports: ["3101:3100"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Dummy exporters (same shape as the federated stack, no tenant headers)
+  # ---------------------------------------------------------------------------
+
+  dummy-app-platform:
+    image: alpine:3.21
+    container_name: dummy-app-platform
+    networks: [lwi]
+    volumes:
+      - applogs-platform:/var/log/app
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /var/log/app
+        i=0
+        while true; do
+          i=$$((i+1))
+          lvl=info
+          if [ $$((i % 5)) -eq 0 ]; then lvl=error; elif [ $$((i % 3)) -eq 0 ]; then lvl=warn; fi
+          echo "ts=$$(date -u +%Y-%m-%dT%H:%M:%SZ) level=$$lvl service=dummy-app msg=\"request handled for platform service\" iter=$$i" >> /var/log/app/app.log
+          sleep 1
+        done
+    restart: unless-stopped
+
+  dummy-app-data:
+    image: alpine:3.21
+    container_name: dummy-app-data
+    networks: [lwi]
+    volumes:
+      - applogs-data:/var/log/app
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /var/log/app
+        i=0
+        while true; do
+          i=$$((i+1))
+          lvl=info
+          if [ $$((i % 5)) -eq 0 ]; then lvl=error; elif [ $$((i % 3)) -eq 0 ]; then lvl=warn; fi
+          echo "ts=$$(date -u +%Y-%m-%dT%H:%M:%SZ) level=$$lvl service=dummy-app msg=\"request handled for data service\" iter=$$i" >> /var/log/app/app.log
+          sleep 1
+        done
+    restart: unless-stopped
+
+  alloy-platform:
+    image: grafana/alloy:latest
+    container_name: alloy-logs-platform
+    depends_on:
+      gigapipe-writer:
+        condition: service_started
+    networks: [lwi]
+    volumes:
+      - ./alloy/config-platform.alloy:/etc/alloy/config.alloy:ro
+      - applogs-platform:/var/log/app:ro
+      - alloydata:/var/lib/alloy/data
+    ports: ["12345:12345"]
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    restart: unless-stopped
+
+  alloy-data:
+    image: grafana/alloy:latest
+    container_name: alloy-logs-data
+    depends_on:
+      gigapipe-writer:
+        condition: service_started
+    networks: [lwi]
+    volumes:
+      - ./alloy/config-data.alloy:/etc/alloy/config.alloy:ro
+      - applogs-data:/var/log/app:ro
+      - alloydata:/var/lib/alloy/data
+    ports: ["12346:12345"]
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    restart: unless-stopped
+
+  # Dummy log-generator nginx: swallows traffic, writes per-source access logs.
+  dummy-nginx:
+    image: nginx:1.27-alpine
+    container_name: dummy-nginx
+    networks: [lwi]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginxlogs:/var/log/nginx
+    restart: unless-stopped
+
+  traffic-platform:
+    image: curlimages/curl:8.11.1
+    container_name: traffic-platform
+    depends_on:
+      dummy-nginx:
+        condition: service_started
+    networks: [lwi]
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while true; do
+          i=$$((i+1))
+          curl -s -o /dev/null "http://dummy-nginx:8080/platform/handle?iter=$$i"
+          sleep 1
+        done
+    restart: unless-stopped
+
+  traffic-data:
+    image: curlimages/curl:8.11.1
+    container_name: traffic-data
+    depends_on:
+      dummy-nginx:
+        condition: service_started
+    networks: [lwi]
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while true; do
+          i=$$((i+1))
+          curl -s -o /dev/null "http://dummy-nginx:8080/data/handle?iter=$$i"
+          sleep 1
+        done
+    restart: unless-stopped
+
+  traffic-api:
+    image: curlimages/curl:8.11.1
+    container_name: traffic-api
+    depends_on:
+      dummy-nginx:
+        condition: service_started
+    networks: [lwi]
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while true; do
+          i=$$((i+1))
+          curl -s -o /dev/null "http://dummy-nginx:8080/api/handle?iter=$$i"
+          sleep 1
+        done
+    restart: unless-stopped
+
+  alloy-nginx:
+    image: grafana/alloy:latest
+    container_name: alloy-logs-nginx
+    depends_on:
+      gigapipe-writer:
+        condition: service_started
+      dummy-nginx:
+        condition: service_started
+    networks: [lwi]
+    volumes:
+      - ./alloy/config-nginx.alloy:/etc/alloy/config.alloy:ro
+      - nginxlogs:/var/log/nginx:ro
+      - alloydata:/var/lib/alloy/data
+    ports: ["12347:12345"]
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Observability UI
+  # ---------------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    depends_on:
+      gigapipe-reader:
+        condition: service_started
+    networks: [lwi]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  # Anonymous-admin Grafana at http://localhost:3000 with a single Loki
+  # datasource pointed at the reader (no tenant header — federation is off).
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    depends_on:
+      gigapipe-reader:
+        condition: service_started
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    networks: [lwi]
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    ports: ["3000:3000"]
+    restart: unless-stopped

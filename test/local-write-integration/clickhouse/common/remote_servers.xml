@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!--
+  The `default` cluster: 3 shards x 2 replicas = 6 nodes.
+  gigapipe is started with CLUSTER_NAME=default, so it issues
+  `CREATE TABLE ... ON CLUSTER default` DDL (local tables + Distributed `_dist`
+  tables) that fans out to all six nodes via Keeper.
+
+  internal_replication=true: a write to a shard goes to ONE replica and
+  ReplicatedMergeTree replicates it to the other. This is exactly what the
+  local-shard writer relies on — it writes only to the shard's WRITE replica
+  (the one exposed via the `ch-write` DNS alias, replica r1 of each shard), and
+  replication fills r2. Reads go through the `_dist` tables, which scatter to
+  every shard and merge.
+
+  Merged into every node's config.d. replace="replace" drops the stock image's
+  example clusters so only `default` remains.
+-->
+<clickhouse>
+    <remote_servers replace="replace">
+        <default>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s1r1</host><port>9000</port></replica>
+                <replica><host>ch-s1r2</host><port>9000</port></replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s2r1</host><port>9000</port></replica>
+                <replica><host>ch-s2r2</host><port>9000</port></replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>ch-s3r1</host><port>9000</port></replica>
+                <replica><host>ch-s3r2</host><port>9000</port></replica>
+            </shard>
+        </default>
+    </remote_servers>
+</clickhouse>
