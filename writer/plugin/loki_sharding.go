@@ -45,6 +45,34 @@ func shardRefreshInterval() time.Duration {
 	return d
 }
 
+// defaultShardDNSSuffix is appended to a replica's system.clusters host_name to
+// form the dial target — a Kubernetes headless-service FQDN, e.g.
+// <pod>.clickhouse-cluster.svc.cluster.local. It is used unless
+// CLICKHOUSE_SHARD_DNS_SUFFIX is set; set that env to "" to dial the raw
+// host_address instead (the local docker stack does this, since its short
+// hostnames don't resolve under a cluster suffix).
+const defaultShardDNSSuffix = "clickhouse-cluster.svc.cluster.local"
+
+// shardDNSSuffix returns the DNS suffix to append to host_name when dialing a
+// shard replica. An explicitly-set env (including empty) overrides the default.
+func shardDNSSuffix() string {
+	if v, ok := os.LookupEnv("CLICKHOUSE_SHARD_DNS_SUFFIX"); ok {
+		return strings.TrimSpace(v)
+	}
+	return defaultShardDNSSuffix
+}
+
+// shardDialHost builds the host to connect to for a replica. When a DNS suffix is
+// configured it dials <host_name>.<suffix>; otherwise it falls back to the
+// discovered host_address. host_name is preferred because pod IPs (host_address)
+// are not stable in Kubernetes, whereas the StatefulSet DNS name is.
+func shardDialHost(rep shardtopo.Replica) string {
+	if suffix := shardDNSSuffix(); suffix != "" && rep.HostName != "" {
+		return rep.HostName + "." + suffix
+	}
+	return rep.HostAddr
+}
+
 func (p *QrynWriterPlugin) buildLokiShardServices(cfg chconfig.ClokiBaseSettingServer) (service.InsertSvcMap, service.InsertSvcMap) {
 	tsMap := make(service.InsertSvcMap)
 	splMap := make(service.InsertSvcMap)
@@ -69,7 +97,7 @@ func (p *QrynWriterPlugin) buildLokiShardServices(cfg chconfig.ClokiBaseSettingS
 
 	buildReplica := func(shardIdx, repIdx int, rep shardtopo.Replica) (service.IInsertServiceV2, service.IInsertServiceV2, string) {
 		node := base
-		node.Host = rep.HostAddr
+		node.Host = shardDialHost(rep)
 		node.Node = fmt.Sprintf("qryn_shard_%d_r%d", shardIdx+1, repIdx+1)
 		node.ClusterName = ""
 		dnm := model.DataDatabasesMap{ClokiBaseDataBase: node}
