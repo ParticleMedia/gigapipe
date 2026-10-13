@@ -131,7 +131,7 @@ ALTER TABLE {{.DB}}.metrics_15s {{.OnCluster}}
     ADD COLUMN IF NOT EXISTS type UInt8,
     MODIFY ORDER BY (fingerprint, timestamp_ns, {{.OID_KEY}}type);
 
-RENAME TABLE {{.DB}}.time_series_gin_view TO time_series_gin_view_bak {{.OnCluster}};
+RENAME TABLE IF EXISTS {{.DB}}.time_series_gin_view TO time_series_gin_view_bak {{.OnCluster}};
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS {{.DB}}.time_series_gin_view {{.OnCluster}} TO time_series_gin
 AS SELECT
@@ -145,7 +145,7 @@ ARRAY JOIN JSONExtractKeysAndValues(time_series.labels, 'String') as pairs;
 
 DROP TABLE IF EXISTS {{.DB}}.time_series_gin_view_bak {{.OnCluster}};
 
-RENAME TABLE {{.DB}}.metrics_15s_mv TO metrics_15s_mv_bak {{.OnCluster}};
+RENAME TABLE IF EXISTS {{.DB}}.metrics_15s_mv TO metrics_15s_mv_bak {{.OnCluster}};
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS {{.DB}}.metrics_15s_mv {{.OnCluster}} TO metrics_15s
 AS SELECT
@@ -215,7 +215,7 @@ ALTER TABLE {{.DB}}.time_series {{.OnCluster}}
 
 ## Further Index Optimizations (only supported in ClickHouse versions >=26.2)
 ALTER TABLE samples_v3 {{.OnCluster}}
-ADD INDEX text_index string TYPE text(
+ADD INDEX IF NOT EXISTS text_index string TYPE text(
     tokenizer = 'splitByNonAlpha'
 );
 

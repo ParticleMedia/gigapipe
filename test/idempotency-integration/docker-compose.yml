@@ -38,25 +38,3 @@ services:
       FEDERATED: "1"
     ports:
       - "3100:3100"
-  
-  gigapipe-2:
-    container_name: gigapipe-2
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    depends_on:
-      gigapipe:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-    environment:
-      CLICKHOUSE_AUTH: "default:"
-      CLICKHOUSE_SERVER: clickhouse
-      CLICKHOUSE_PORT: "9000"
-      CLICKHOUSE_DB: gigapipe
-      CLUSTER_NAME: default
-      MODE: "init_only"
-      PORT: "3100"
-      FEDERATED: "1"
-    ports:
-      - "3100:3100"
