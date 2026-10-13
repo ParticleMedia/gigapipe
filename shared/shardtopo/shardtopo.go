@@ -69,6 +69,7 @@ func Discover(ctx context.Context, q Querier, clusterName string, allowIPs map[s
 		if dnsSuffix != "" && r.HostName != "" {
 			r.HostAddr = resolveHostAddr(r.HostName + "." + dnsSuffix)
 		}
+		fmt.Println("shardtopo: discovered replica:", r.HostAddr)
 		replicas = append(replicas, r)
 	}
 	if err := rows.Err(); err != nil {
