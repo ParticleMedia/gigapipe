@@ -162,7 +162,7 @@ func (p *QrynWriterPlugin) buildLokiShardServices(cfg chconfig.ClokiBaseSettingS
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	topo, err := shardtopo.New(ctx, p.ServicesObject.Dbv2Map[0], base.ClusterName, base.Host,
-		shardRefreshInterval(), shardLogger{}, onGrow)
+		shardRefreshInterval(), shardLogger{}, onGrow, shardDNSSuffix())
 	if err != nil {
 		logger.Error("CLICKHOUSE_LOCAL_SHARD_WRITES: topology discovery failed:", err)
 		os.Exit(1)

@@ -44,7 +44,7 @@ type Snapshot struct {
 const discoveryQuery = `SELECT shard_num, replica_num, host_name, host_address, port ` +
 	`FROM system.clusters WHERE cluster = $1 ORDER BY shard_num, replica_num`
 
-func Discover(ctx context.Context, q Querier, clusterName string, allowIPs map[string]bool) (*Snapshot, error) {
+func Discover(ctx context.Context, q Querier, clusterName string, allowIPs map[string]bool, dnsSuffix string) (*Snapshot, error) {
 	if clusterName == "" {
 		return nil, fmt.Errorf("shardtopo: empty cluster name")
 	}
@@ -66,8 +66,10 @@ func Discover(ctx context.Context, q Querier, clusterName string, allowIPs map[s
 		}
 		r.ShardNum = int(shardNum)
 		r.ReplicaNum = int(replicaNum)
+		if dnsSuffix != "" && r.HostName != "" {
+			r.HostAddr = resolveHostAddr(r.HostName + "." + dnsSuffix)
+		}
 		replicas = append(replicas, r)
-		fmt.Println("shardtopo: discovered replica: ", r.HostAddr)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("shardtopo: iterate system.clusters: %w", err)
@@ -132,6 +134,14 @@ func replicaInWriteSet(r Replica, allowIPs map[string]bool) bool {
 	return allowIPs[normalizeIP(r.HostAddr)] || allowIPs[normalizeIP(r.HostName)]
 }
 
+func resolveHostAddr(fqdn string) string {
+	ips, err := net.LookupHost(fqdn)
+	if err != nil || len(ips) == 0 {
+		return ""
+	}
+	return normalizeIP(ips[0])
+}
+
 func normalizeIP(s string) string {
 	s = strings.TrimSpace(s)
 	if ip := net.ParseIP(s); ip != nil {
@@ -169,7 +179,7 @@ type Topology struct {
 	done   chan struct{}
 }
 
-func New(ctx context.Context, q Querier, clusterName, seedHost string, interval time.Duration, log Logger, onGrow func(prev, next *Snapshot) error) (*Topology, error) {
+func New(ctx context.Context, q Querier, clusterName, seedHost string, interval time.Duration, log Logger, onGrow func(prev, next *Snapshot) error, dnsSuffix string) (*Topology, error) {
 	t := &Topology{
 		interval: interval,
 		log:      log,
@@ -179,7 +189,7 @@ func New(ctx context.Context, q Querier, clusterName, seedHost string, interval 
 			if err != nil {
 				return nil, err
 			}
-			return Discover(c, q, clusterName, allowIPs)
+			return Discover(c, q, clusterName, allowIPs, dnsSuffix)
 		},
 	}
 	snap, err := t.discover(ctx)
