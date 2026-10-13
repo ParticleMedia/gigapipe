@@ -277,6 +277,9 @@ services:
       # The opt-in: write Loki rows to local shard tables instead of `_dist`.
       CLICKHOUSE_LOCAL_SHARD_WRITES: "true"
       CLICKHOUSE_SHARD_REFRESH_INTERVAL: "30s"
+      # Dial the discovered host_address: these docker hostnames (ch-s1r1, ...)
+      # don't resolve under the K8s cluster DNS suffix that is the default.
+      CLICKHOUSE_SHARD_DNS_SUFFIX: ""
       # Flush ingested logs quickly so queries see data within ~1s.
       BULK_MAX_AGE_MS: "1000"
     networks: [lwi]
