@@ -164,16 +164,16 @@ GROUP BY {{.OID_KEY}}fingerprint, timestamp_ns, type;
 DROP TABLE IF EXISTS {{.DB}}.metrics_15s_mv_bak {{.OnCluster}};
 
 ALTER TABLE time_series {{.OnCluster}}
-    ADD COLUMN `type_v2` UInt8 ALIAS type;
+    ADD COLUMN IF NOT EXISTS `type_v2` UInt8 ALIAS type;
 
 ALTER TABLE time_series_gin {{.OnCluster}}
-    ADD COLUMN `type_v2` UInt8 ALIAS type;
+    ADD COLUMN IF NOT EXISTS `type_v2` UInt8 ALIAS type;
 
 ALTER TABLE samples_v3 {{.OnCluster}}
-    ADD COLUMN `type_v2` UInt8 ALIAS type;
+    ADD COLUMN IF NOT EXISTS `type_v2` UInt8 ALIAS type;
 
 ALTER TABLE metrics_15s {{.OnCluster}}
-    ADD COLUMN `type_v2` UInt8 ALIAS type;
+    ADD COLUMN IF NOT EXISTS `type_v2` UInt8 ALIAS type;
 
 CREATE TABLE IF NOT EXISTS {{.DB}}.patterns {{.OnCluster}}(
     timestamp_10m UInt32,
